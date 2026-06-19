@@ -75,12 +75,19 @@ jobs:
         # Extract ffmpeg/ffprobe plus their full shared-library closure from the
         # runtime image so the package runs standalone (ErsatzRS sets
         # LD_LIBRARY_PATH=<dir>/lib). Requires a host glibc >= the build's.
+        # Stage under RUNNER_TEMP (outside the checked-out repo) and run the
+        # container as the runner user, so no root-owned files land in the
+        # workspace to break the next Checkout on this persistent self-hosted
+        # runner.
+        env:
+          IMG: ${{ env.IMAGE_NAME }}:${{ steps.ver.outputs.version }}
+          STAGE: ${{ runner.temp }}/lx-out
         run: |
           set -euo pipefail
-          rm -rf out && mkdir -p out
-          docker run --rm --entrypoint bash \
-            -v "$PWD/out:/out" \
-            "${IMAGE_NAME}:${{ steps.ver.outputs.version }}" -c '
+          rm -rf "$STAGE" && mkdir -p "$STAGE"
+          docker run --rm --user "$(id -u):$(id -g)" --entrypoint bash \
+            -v "$STAGE:/out" \
+            "$IMG" -c '
               set -e
               dest=/out/ffmpeg
               mkdir -p "$dest/lib"
@@ -92,17 +99,21 @@ jobs:
             '
 
       - name: Archive linux-x64 package
+        env:
+          STAGE: ${{ runner.temp }}/lx-out
+          OUTDIR: ${{ runner.temp }}
+          VERSION: ${{ steps.ver.outputs.version }}
         run: |
           set -euo pipefail
-          tar -C out -czf "ersatzrs-ffmpeg-${{ steps.ver.outputs.version }}-linux-x64.tar.gz" ffmpeg
-          ( cd . && sha256sum "ersatzrs-ffmpeg-${{ steps.ver.outputs.version }}-linux-x64.tar.gz" \
-            > "ersatzrs-ffmpeg-${{ steps.ver.outputs.version }}-linux-x64.tar.gz.sha256" )
+          pkg="ersatzrs-ffmpeg-${VERSION}-linux-x64.tar.gz"
+          tar -C "$STAGE" -czf "$OUTDIR/$pkg" ffmpeg
+          ( cd "$OUTDIR" && sha256sum "$pkg" > "$pkg.sha256" )
 
       - name: Upload linux-x64 artifact
         uses: actions/upload-artifact@v4
         with:
           name: linux-x64
-          path: ersatzrs-ffmpeg-*-linux-x64.tar.gz*
+          path: ${{ runner.temp }}/ersatzrs-ffmpeg-*-linux-x64.tar.gz*
           if-no-files-found: error
 
   win-x64:
