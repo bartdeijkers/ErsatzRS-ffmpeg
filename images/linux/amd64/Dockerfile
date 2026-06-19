@@ -8,8 +8,7 @@ ENV MAKEFLAGS="-j4" \
     PATH="/root/.cargo/bin:${PATH}"
 
 ENV AOM=v3.12.0 \
-    FDKAAC=2.0.3 \
-    FFMPEG_HARD=7.1.1 \
+    FFMPEG_HARD=8.1.2 \
     FONTCONFIG=2.16.0 \
     FREETYPE=2.13.3 \
     FRIBIDI=1.0.16 \
@@ -22,6 +21,7 @@ ENV AOM=v3.12.0 \
     LIBDOVI=2.2.0 \
     LIBDRM=2.4.124 \
     LIBGL=1.7.0 \
+    LIBJXL=0.11.2 \
     LIBPLACEBO=7.349.0 \
     LIBSRT=1.5.4 \
     LIBVA=2.22.0 \
@@ -33,6 +33,7 @@ ENV AOM=v3.12.0 \
     OPENJPEG=2.5.3 \
     OPUS=1.5.2 \
     SHADERC=v2025.1 \
+    SVTAV1=3.0.2 \
     THEORA=1.1.1 \
     VORBIS=1.3.7 \
     VPX=1.15.0 \
@@ -75,6 +76,7 @@ RUN apt-get -yqq update && \
     git \
     gperf \
     jq \
+    libcairo2-dev \
     libexpat1-dev \
     libxext-dev \
     libgcc-9-dev \
@@ -147,20 +149,6 @@ RUN cd /tmp/aom && \
     -DBUILD_STATIC_LIBS=0 .. && \
     make && \
     make install
-
-# fdk-aac
-RUN mkdir -p /tmp/fdk-aac && \
-    curl -Lf \
-    https://github.com/mstorsjo/fdk-aac/archive/v${FDKAAC}.tar.gz | \
-    tar -zx --strip-components=1 -C /tmp/fdk-aac
-RUN cd /tmp/fdk-aac && \
-    autoreconf -fiv && \
-    ./configure \
-    --disable-static \
-    --enable-shared && \
-    make && \
-    make install && \
-    strip -d /usr/local/lib/libfdk-aac.so
 
 # ffnvcodec
 RUN mkdir -p /tmp/ffnvcodec && \
@@ -603,6 +591,47 @@ RUN cd /tmp/zimg && \
     make && \
     make install
 
+# svt-av1
+RUN mkdir -p /tmp/svt-av1 && \
+    curl -Lf \
+    https://gitlab.com/AOMediaCodec/SVT-AV1/-/archive/v${SVTAV1}/SVT-AV1-v${SVTAV1}.tar.gz | \
+    tar -zx --strip-components=1 -C /tmp/svt-av1
+RUN cd /tmp/svt-av1 && \
+    mkdir -p Build && \
+    cd Build && \
+    cmake .. \
+    -DCMAKE_BUILD_TYPE=Release \
+    -DBUILD_SHARED_LIBS=ON \
+    -DBUILD_TESTING=OFF \
+    -DBUILD_APPS=OFF && \
+    make && \
+    make install && \
+    strip -d /usr/local/lib/libSvtAv1Enc.so
+
+# libjxl (JPEG XL)
+RUN mkdir -p /tmp/libjxl && \
+    git clone \
+    --branch v${LIBJXL} \
+    --recursive --depth 1 https://github.com/libjxl/libjxl.git \
+    /tmp/libjxl
+RUN cd /tmp/libjxl && \
+    mkdir -p build && \
+    cd build && \
+    cmake .. \
+    -DCMAKE_BUILD_TYPE=Release \
+    -DBUILD_SHARED_LIBS=ON \
+    -DBUILD_TESTING=OFF \
+    -DJPEGXL_ENABLE_BENCHMARK=OFF \
+    -DJPEGXL_ENABLE_EXAMPLES=OFF \
+    -DJPEGXL_ENABLE_DOXYGEN=OFF \
+    -DJPEGXL_ENABLE_MANPAGES=OFF \
+    -DJPEGXL_ENABLE_JNI=OFF \
+    -DJPEGXL_ENABLE_TOOLS=OFF \
+    -DJPEGXL_ENABLE_PLUGINS=OFF \
+    -DJPEGXL_ENABLE_DEVTOOLS=OFF && \
+    make && \
+    make install
+
 # ffmpeg
 RUN if [ -z ${FFMPEG_VERSION+x} ]; then \
     FFMPEG=${FFMPEG_HARD}; \
@@ -621,6 +650,7 @@ RUN cd /tmp/ffmpeg && \
     --disable-debug \
     --disable-doc \
     --disable-ffplay \
+    --enable-cairo \
     --enable-cuda \
     --enable-cuda-llvm \
     --enable-cuvid \
@@ -630,10 +660,11 @@ RUN cd /tmp/ffmpeg && \
     --enable-libaom \
     --enable-libdav1d \
     --enable-libass \
-    --enable-libfdk_aac \
     --enable-libfontconfig \
     --enable-libfreetype \
     --enable-libfribidi \
+    --enable-libharfbuzz \
+    --enable-libjxl \
     --enable-libkvazaar \
     --enable-libmp3lame \
     --enable-libopencore-amrnb \
@@ -643,6 +674,7 @@ RUN cd /tmp/ffmpeg && \
     --enable-libplacebo \
     --enable-libshaderc \
     --enable-libsrt \
+    --enable-libsvtav1 \
     --enable-libtheora \
     --enable-libv4l2 \
     --enable-libvorbis \
@@ -654,7 +686,6 @@ RUN cd /tmp/ffmpeg && \
     --enable-libx265 \
     --enable-libxvid \
     --enable-libzimg \
-    --enable-nonfree \
     --enable-nvdec \
     --enable-nvenc \
     --enable-opencl \
@@ -742,6 +773,7 @@ RUN apt-get -yqq update && \
     i965-va-driver-shaders \
     ca-certificates \
     expat \
+    libcairo2 \
     libgomp1 \
     libllvm15 \
     libharfbuzz-bin \
