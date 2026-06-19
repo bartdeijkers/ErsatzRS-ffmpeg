@@ -165,7 +165,7 @@ jobs:
             mingw-w64-x86_64-xvidcore
             mingw-w64-x86_64-kvazaar
             mingw-w64-x86_64-srt
-            mingw-w64-x86_64-nv-codec-headers
+            mingw-w64-x86_64-ffnvcodec-headers
             mingw-w64-x86_64-vulkan-loader
             mingw-w64-x86_64-vulkan-headers
             mingw-w64-x86_64-shaderc
