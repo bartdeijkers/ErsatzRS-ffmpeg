@@ -1,0 +1,268 @@
+name: Release
+
+# Release-driven build, mirroring the ErsatzRS ci.yml + release.yml split:
+# multi-platform.yml is the continuous (push-to-main) Docker CI, while this
+# workflow produces the per-RID FFmpeg packages that ErsatzRS downloads at
+# startup (ADR-0008) and attaches them to the GitHub Release for the tag.
+#
+# v1.0.0 is intentionally scoped to two RIDs only: linux-x64 and win-x64.
+# (arm64/arm-v7/osx are produced by the continuous Docker CI / future work.)
+#
+# Runs on the same self-hosted runners as ErsatzRS:
+#   linux-x64 -> [self-hosted, ersatzrs-linux-release]
+#   win-x64   -> [self-hosted, ersatzrs-windows-release]
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Release tag to build (e.g. v1.0.0). Dispatch builds the packages but does not publish a release.'
+        required: true
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ghcr.io/bartdeijkers/ersatzrs-ffmpeg
+  # Upstream FFmpeg version these packages contain (independent of the repo
+  # release tag, which is the v*.*.* git tag).
+  FFMPEG_VERSION: 8.1.2
+
+jobs:
+  linux-x64:
+    name: Build linux-x64 package
+    runs-on: [self-hosted, ersatzrs-linux-release]
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Resolve version
+        id: ver
+        env:
+          REF: ${{ github.event.inputs.tag || github.ref_name }}
+        run: |
+          echo "tag=${REF}" >> "$GITHUB_OUTPUT"
+          echo "version=${REF#v}" >> "$GITHUB_OUTPUT"
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to container registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push linux/amd64 image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ./images/linux/amd64/Dockerfile
+          platforms: linux/amd64
+          load: true
+          push: true
+          tags: |
+            ${{ env.IMAGE_NAME }}:${{ steps.ver.outputs.version }}
+            ${{ env.IMAGE_NAME }}:${{ env.FFMPEG_VERSION }}
+            ${{ env.IMAGE_NAME }}:latest
+
+      - name: Stage self-contained linux-x64 package
+        # Extract ffmpeg/ffprobe plus their full shared-library closure from the
+        # runtime image so the package runs standalone (ErsatzRS sets
+        # LD_LIBRARY_PATH=<dir>/lib). Requires a host glibc >= the build's.
+        run: |
+          set -euo pipefail
+          rm -rf out && mkdir -p out
+          docker run --rm --entrypoint bash \
+            -v "$PWD/out:/out" \
+            "${IMAGE_NAME}:${{ steps.ver.outputs.version }}" -c '
+              set -e
+              dest=/out/ffmpeg
+              mkdir -p "$dest/lib"
+              cp /usr/local/bin/ffmpeg /usr/local/bin/ffprobe "$dest/"
+              for b in "$dest/ffmpeg" "$dest/ffprobe"; do
+                ldd "$b" | awk "/=> \// {print \$3}" | sort -u | \
+                  while read -r so; do [ -f "$so" ] && cp -Lu "$so" "$dest/lib/" || true; done
+              done
+            '
+
+      - name: Archive linux-x64 package
+        run: |
+          set -euo pipefail
+          tar -C out -czf "ersatzrs-ffmpeg-${{ steps.ver.outputs.version }}-linux-x64.tar.gz" ffmpeg
+          ( cd . && sha256sum "ersatzrs-ffmpeg-${{ steps.ver.outputs.version }}-linux-x64.tar.gz" \
+            > "ersatzrs-ffmpeg-${{ steps.ver.outputs.version }}-linux-x64.tar.gz.sha256" )
+
+      - name: Upload linux-x64 artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: linux-x64
+          path: ersatzrs-ffmpeg-*-linux-x64.tar.gz*
+          if-no-files-found: error
+
+  win-x64:
+    name: Build win-x64 package
+    runs-on: [self-hosted, ersatzrs-windows-release]
+    defaults:
+      run:
+        shell: msys2 {0}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Resolve version
+        id: ver
+        shell: bash
+        env:
+          REF: ${{ github.event.inputs.tag || github.ref_name }}
+        run: |
+          echo "tag=${REF}" >> "$GITHUB_OUTPUT"
+          echo "version=${REF#v}" >> "$GITHUB_OUTPUT"
+
+      - name: Set up MSYS2 (MINGW64)
+        uses: msys2/setup-msys2@v2
+        with:
+          msystem: MINGW64
+          update: true
+          install: >-
+            base-devel git zip
+            mingw-w64-x86_64-toolchain
+            mingw-w64-x86_64-cmake
+            mingw-w64-x86_64-nasm
+            mingw-w64-x86_64-pkgconf
+            mingw-w64-x86_64-cairo
+            mingw-w64-x86_64-harfbuzz
+            mingw-w64-x86_64-fontconfig
+            mingw-w64-x86_64-freetype
+            mingw-w64-x86_64-libass
+            mingw-w64-x86_64-fribidi
+            mingw-w64-x86_64-zimg
+            mingw-w64-x86_64-svt-av1
+            mingw-w64-x86_64-libjxl
+            mingw-w64-x86_64-dav1d
+            mingw-w64-x86_64-aom
+            mingw-w64-x86_64-x264
+            mingw-w64-x86_64-x265
+            mingw-w64-x86_64-libvpx
+            mingw-w64-x86_64-opus
+            mingw-w64-x86_64-libvorbis
+            mingw-w64-x86_64-libtheora
+            mingw-w64-x86_64-libwebp
+            mingw-w64-x86_64-openjpeg2
+            mingw-w64-x86_64-lame
+            mingw-w64-x86_64-opencore-amr
+            mingw-w64-x86_64-libxml2
+            mingw-w64-x86_64-openssl
+            mingw-w64-x86_64-xvidcore
+            mingw-w64-x86_64-kvazaar
+            mingw-w64-x86_64-srt
+            mingw-w64-x86_64-nv-codec-headers
+            mingw-w64-x86_64-vulkan-loader
+            mingw-w64-x86_64-vulkan-headers
+            mingw-w64-x86_64-shaderc
+            mingw-w64-x86_64-libplacebo
+
+      - name: Build FFmpeg ${{ env.FFMPEG_VERSION }}
+        run: |
+          set -euo pipefail
+          curl -Lf "https://ffmpeg.org/releases/ffmpeg-${FFMPEG_VERSION}.tar.bz2" | tar -jx
+          cd "ffmpeg-${FFMPEG_VERSION}"
+          ./configure \
+            --prefix=/mingw64 \
+            --disable-debug \
+            --disable-doc \
+            --disable-ffplay \
+            --enable-ffprobe \
+            --enable-gpl \
+            --enable-version3 \
+            --enable-cairo \
+            --enable-d3d11va \
+            --enable-dxva2 \
+            --enable-libaom \
+            --enable-libass \
+            --enable-libdav1d \
+            --enable-libfontconfig \
+            --enable-libfreetype \
+            --enable-libfribidi \
+            --enable-libharfbuzz \
+            --enable-libjxl \
+            --enable-libkvazaar \
+            --enable-libmp3lame \
+            --enable-libopencore-amrnb \
+            --enable-libopencore-amrwb \
+            --enable-libopenjpeg \
+            --enable-libopus \
+            --enable-libplacebo \
+            --enable-libshaderc \
+            --enable-libsrt \
+            --enable-libsvtav1 \
+            --enable-libtheora \
+            --enable-libvorbis \
+            --enable-libvpx \
+            --enable-libwebp \
+            --enable-libx264 \
+            --enable-libx265 \
+            --enable-libxml2 \
+            --enable-libxvid \
+            --enable-libzimg \
+            --enable-nvdec \
+            --enable-nvenc \
+            --enable-openssl \
+            --enable-vulkan
+          make -j"$(nproc)"
+
+      - name: Package win-x64
+        run: |
+          set -euo pipefail
+          ver='${{ steps.ver.outputs.version }}'
+          dest="ersatzrs-ffmpeg-${ver}-win-x64"
+          rm -rf "$dest" && mkdir -p "$dest"
+          cp "ffmpeg-${FFMPEG_VERSION}/ffmpeg.exe" "ffmpeg-${FFMPEG_VERSION}/ffprobe.exe" "$dest/"
+          # Bundle the full DLL closure from /mingw64 so the package runs without MSYS2.
+          for exe in "$dest"/*.exe; do
+            ldd "$exe" | awk '/\/mingw64\/bin\// {print $3}' | sort -u | \
+              while read -r dll; do [ -f "$dll" ] && cp -u "$dll" "$dest/" || true; done
+          done
+          zip -r "${dest}.zip" "$dest"
+          sha256sum "${dest}.zip" > "${dest}.zip.sha256"
+
+      - name: Upload win-x64 artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: win-x64
+          path: ersatzrs-ffmpeg-*-win-x64.zip*
+          if-no-files-found: error
+
+  release:
+    name: Publish release
+    # Only publish for an actual tag push; workflow_dispatch is build-only.
+    if: ${{ github.event_name == 'push' }}
+    needs: [linux-x64, win-x64]
+    runs-on: [self-hosted, ersatzrs-linux-release]
+    permissions:
+      contents: write
+    steps:
+      - name: Download artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+
+      - name: Create / update GitHub release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          tag="$TAG"
+          gh release view "$tag" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1 \
+            && gh release upload "$tag" dist/* --repo "$GITHUB_REPOSITORY" --clobber \
+            || gh release create "$tag" dist/* \
+                 --repo "$GITHUB_REPOSITORY" \
+                 --title "$tag" \
+                 --notes "FFmpeg ${FFMPEG_VERSION} for ErsatzRS (drawvg/cairo, libsvtav1, libjxl, zimg). RIDs: linux-x64, win-x64."
