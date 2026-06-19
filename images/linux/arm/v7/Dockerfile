@@ -7,8 +7,7 @@ ENV DEBIAN_FRONTEND="noninteractive"
 ENV MAKEFLAGS="-j4"
 
 ENV AOM=v3.12.0 \
-    FDKAAC=2.0.3 \
-    FFMPEG_HARD=7.1.1 \
+    FFMPEG_HARD=8.1.2 \
     FONTCONFIG=2.16.0 \
     FREETYPE=2.13.3 \
     FRIBIDI=1.0.16 \
@@ -16,6 +15,7 @@ ENV AOM=v3.12.0 \
     LAME=3.100 \
     LIBASS=0.17.3 \
     LIBDAV1D=1.5.1 \
+    LIBJXL=0.11.2 \
     LIBSRT=1.5.4 \
     LIBVIDSTAB=1.1.0 \
     LIBWEBP=1.5.0 \
@@ -23,11 +23,13 @@ ENV AOM=v3.12.0 \
     OPENCOREAMR=0.1.6 \
     OPENJPEG=2.5.3 \
     OPUS=1.5.2 \
+    SVTAV1=3.0.2 \
     THEORA=1.1.1 \
     VORBIS=1.3.7 \
     VPX=1.15.0 \
     X265=3.4 \
-    XVID=1.3.7 
+    XVID=1.3.7 \
+    ZIMG=3.0.5
 
 RUN apt-get -yqq update && \ 
     apt-get -yq --no-install-recommends install -y \
@@ -43,6 +45,7 @@ RUN apt-get -yqq update && \
     gcc \
     git \
     gperf \
+    libcairo2-dev \
     libexpat1-dev \
     libxext-dev \
     libgcc-9-dev \
@@ -103,19 +106,6 @@ RUN mkdir /tmp/dav1d/build && cd /tmp/dav1d/build && \
     meson setup -Denable_tools=false -Denable_tests=false --libdir /usr/local/lib .. && \
     ninja && \
     ninja install
-
-# fdk-aac
-RUN mkdir -p /tmp/fdk-aac && \
-    curl -Lf \
-    https://github.com/mstorsjo/fdk-aac/archive/v${FDKAAC}.tar.gz | \
-    tar -zx --strip-components=1 -C /tmp/fdk-aac
-RUN cd /tmp/fdk-aac && \
-    autoreconf -fiv && \
-    ./configure \
-    --disable-static \
-    --enable-shared && \
-    make && \
-    make install
 
 # freetype
 RUN mkdir -p /tmp/freetype && \
@@ -380,7 +370,62 @@ RUN mkdir -p /tmp/xvid && \
     https://downloads.xvid.com/downloads/xvidcore-${XVID}.tar.gz | \
     tar -zx --strip-components=1 -C /tmp/xvid
 RUN cd /tmp/xvid/build/generic && \
-    ./configure && \ 
+    ./configure && \
+    make && \
+    make install
+
+# zimg
+RUN mkdir -p /tmp/zimg && \
+    git clone \
+    --branch release-${ZIMG} --depth 1 \
+    https://github.com/sekrit-twc/zimg.git \
+    /tmp/zimg
+RUN cd /tmp/zimg && \
+    ./autogen.sh && \
+    ./configure \
+    --disable-static \
+    --enable-shared && \
+    make && \
+    make install
+
+# svt-av1
+RUN mkdir -p /tmp/svt-av1 && \
+    curl -Lf \
+    https://gitlab.com/AOMediaCodec/SVT-AV1/-/archive/v${SVTAV1}/SVT-AV1-v${SVTAV1}.tar.gz | \
+    tar -zx --strip-components=1 -C /tmp/svt-av1
+RUN cd /tmp/svt-av1 && \
+    mkdir -p Build && \
+    cd Build && \
+    cmake .. \
+    -DCMAKE_BUILD_TYPE=Release \
+    -DBUILD_SHARED_LIBS=ON \
+    -DBUILD_TESTING=OFF \
+    -DBUILD_APPS=OFF && \
+    make && \
+    make install && \
+    strip -d /usr/local/lib/libSvtAv1Enc.so
+
+# libjxl (JPEG XL)
+RUN mkdir -p /tmp/libjxl && \
+    git clone \
+    --branch v${LIBJXL} \
+    --recursive --depth 1 https://github.com/libjxl/libjxl.git \
+    /tmp/libjxl
+RUN cd /tmp/libjxl && \
+    mkdir -p build && \
+    cd build && \
+    cmake .. \
+    -DCMAKE_BUILD_TYPE=Release \
+    -DBUILD_SHARED_LIBS=ON \
+    -DBUILD_TESTING=OFF \
+    -DJPEGXL_ENABLE_BENCHMARK=OFF \
+    -DJPEGXL_ENABLE_EXAMPLES=OFF \
+    -DJPEGXL_ENABLE_DOXYGEN=OFF \
+    -DJPEGXL_ENABLE_MANPAGES=OFF \
+    -DJPEGXL_ENABLE_JNI=OFF \
+    -DJPEGXL_ENABLE_TOOLS=OFF \
+    -DJPEGXL_ENABLE_PLUGINS=OFF \
+    -DJPEGXL_ENABLE_DEVTOOLS=OFF && \
     make && \
     make install
 
@@ -400,14 +445,16 @@ RUN cd /tmp/ffmpeg && \
     --disable-debug \
     --disable-doc \
     --disable-ffplay \
+    --enable-cairo \
     --enable-ffprobe \
-    --enable-fontconfig \
+    --enable-libfontconfig \
     --enable-gpl \
     --enable-libaom \
     --enable-libdav1d \
     --enable-libass \
-    --enable-libfdk_aac \
     --enable-libfreetype \
+    --enable-libharfbuzz \
+    --enable-libjxl \
     --enable-libkvazaar \
     --enable-libmp3lame \
     --enable-libopencore-amrnb \
@@ -415,6 +462,7 @@ RUN cd /tmp/ffmpeg && \
     --enable-libopenjpeg \
     --enable-libopus \
     --enable-libsrt \
+    --enable-libsvtav1 \
     --enable-libtheora \
     --enable-libv4l2 \
     --enable-libvidstab \
@@ -425,7 +473,7 @@ RUN cd /tmp/ffmpeg && \
     --enable-libx264 \
     --enable-libx265 \
     --enable-libxvid \
-    --enable-nonfree \
+    --enable-libzimg \
     --enable-openssl \
     --enable-small \
     --enable-stripping \
@@ -452,7 +500,7 @@ FROM ${BASE_IMAGE}:${BASE_IMAGE_TAG} AS runtime-base
 ENV MAKEFLAGS="-j4"
 
 RUN apt-get -yqq update && \
-    DEBIAN_FRONTEND="noninteractive" apt-get install -yq --no-install-recommends ca-certificates expat libgomp1 libharfbuzz-bin libxml2 libxcb-shape0 libv4l-0 \
+    DEBIAN_FRONTEND="noninteractive" apt-get install -yq --no-install-recommends ca-certificates expat libcairo2 libgomp1 libharfbuzz-bin libxml2 libxcb-shape0 libv4l-0 \
     && apt autoremove -y \
     && rm -rf /var/lib/apt/lists/*
 
