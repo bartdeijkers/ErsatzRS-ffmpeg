@@ -2,10 +2,12 @@ name: Docker Publish Multi-Platform
 
 on:
   workflow_dispatch:
-  pull_request:
   push:
     branches:
       - main
+  # No pull_request trigger: a full all-arch (amd64 + arm64/armv7-via-QEMU)
+  # build per PR is slow and contends with releases on the single self-hosted
+  # Linux runner. PRs are validated by the release dry run (workflow_dispatch).
 
 env:
   REGISTRY: ghcr.io
