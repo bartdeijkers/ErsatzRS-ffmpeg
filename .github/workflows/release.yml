@@ -117,12 +117,16 @@ jobs:
 
       - name: Resolve version
         id: ver
-        shell: bash
+        # Runs before MSYS2 is set up, so use PowerShell rather than `bash`
+        # (which resolves to WSL bash on the self-hosted Windows runner and
+        # cannot execute the Actions temp script).
+        shell: pwsh
         env:
           REF: ${{ github.event.inputs.tag || github.ref_name }}
         run: |
-          echo "tag=${REF}" >> "$GITHUB_OUTPUT"
-          echo "version=${REF#v}" >> "$GITHUB_OUTPUT"
+          $ref = $env:REF
+          "tag=$ref"                        | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
+          "version=$($ref -replace '^v','')" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
 
       - name: Set up MSYS2 (MINGW64)
         uses: msys2/setup-msys2@v2
