@@ -8,9 +8,12 @@ name: Release
 # v1.0.0 is intentionally scoped to two RIDs only: linux-x64 and win-x64.
 # (arm64/arm-v7/osx are produced by the continuous Docker CI / future work.)
 #
-# Runs on the same self-hosted runners as ErsatzRS:
+# Runs on the self-hosted Linux release runner. linux-x64 is extracted from the
+# runtime Docker image; win-x64 is statically cross-compiled with
+# BtbN/FFmpeg-Builds (Docker) — see images/win/ffmpeg-builds/. The Windows
+# self-hosted runner is no longer used for releases.
 #   linux-x64 -> [self-hosted, ersatzrs-linux-release]
-#   win-x64   -> [self-hosted, ersatzrs-windows-release]
+#   win-x64   -> [self-hosted, ersatzrs-linux-release]
 
 on:
   push:
@@ -118,139 +121,73 @@ jobs:
 
   win-x64:
     name: Build win-x64 package
-    runs-on: [self-hosted, ersatzrs-windows-release]
-    defaults:
-      run:
-        shell: msys2 {0}
+    # Statically cross-compiled with BtbN/FFmpeg-Builds (Docker) so the package
+    # ships two self-contained executables instead of a thin .exe + DLL closure.
+    # Runs on the Linux release runner (Docker), not the Windows runner.
+    runs-on: [self-hosted, ersatzrs-linux-release]
+    env:
+      # Pinned FFmpeg-Builds commit (bump deliberately; see
+      # images/win/ffmpeg-builds/README.md).
+      FFBUILDS_REF: bfcf840002eb1cf68ed626657db2d250cf62e8a2
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
       - name: Resolve version
         id: ver
-        # Runs before MSYS2 is set up, so use PowerShell rather than `bash`
-        # (which resolves to WSL bash on the self-hosted Windows runner and
-        # cannot execute the Actions temp script).
-        shell: pwsh
         env:
           REF: ${{ github.event.inputs.tag || github.ref_name }}
         run: |
-          $ref = $env:REF
-          "tag=$ref"                        | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
-          "version=$($ref -replace '^v','')" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
+          echo "tag=${REF}" >> "$GITHUB_OUTPUT"
+          echo "version=${REF#v}" >> "$GITHUB_OUTPUT"
 
-      - name: Set up MSYS2 (MINGW64)
-        uses: msys2/setup-msys2@v2
-        with:
-          msystem: MINGW64
-          update: true
-          install: >-
-            base-devel git zip
-            mingw-w64-x86_64-toolchain
-            mingw-w64-x86_64-cmake
-            mingw-w64-x86_64-nasm
-            mingw-w64-x86_64-pkgconf
-            mingw-w64-x86_64-cairo
-            mingw-w64-x86_64-harfbuzz
-            mingw-w64-x86_64-fontconfig
-            mingw-w64-x86_64-freetype
-            mingw-w64-x86_64-libass
-            mingw-w64-x86_64-fribidi
-            mingw-w64-x86_64-zimg
-            mingw-w64-x86_64-svt-av1
-            mingw-w64-x86_64-libjxl
-            mingw-w64-x86_64-dav1d
-            mingw-w64-x86_64-aom
-            mingw-w64-x86_64-x264
-            mingw-w64-x86_64-x265
-            mingw-w64-x86_64-libvpx
-            mingw-w64-x86_64-opus
-            mingw-w64-x86_64-libvorbis
-            mingw-w64-x86_64-libtheora
-            mingw-w64-x86_64-libwebp
-            mingw-w64-x86_64-openjpeg2
-            mingw-w64-x86_64-lame
-            mingw-w64-x86_64-opencore-amr
-            mingw-w64-x86_64-libxml2
-            mingw-w64-x86_64-openssl
-            mingw-w64-x86_64-xvidcore
-            mingw-w64-x86_64-kvazaar
-            mingw-w64-x86_64-srt
-            mingw-w64-x86_64-ffnvcodec-headers
-            mingw-w64-x86_64-vulkan-loader
-            mingw-w64-x86_64-vulkan-headers
-            mingw-w64-x86_64-shaderc
-            mingw-w64-x86_64-libplacebo
-
-      - name: Build FFmpeg ${{ env.FFMPEG_VERSION }}
+      - name: Build static win-x64 FFmpeg via BtbN FFmpeg-Builds
+        # makeimage.sh builds the cross toolchain + every dependency into a
+        # Docker image; build.sh then statically links FFmpeg against them.
+        # The `8.1` addin sets FFmpeg version gating; GIT_BRANCH_OVERRIDE pins
+        # the exact upstream release tag (n8.1.2). Our cairo/pixman overrides
+        # (which upstream lacks) are dropped into scripts.d/ first.
+        env:
+          WORK: ${{ runner.temp }}/ffmpeg-builds
+          FFTAG: n${{ env.FFMPEG_VERSION }}
         run: |
           set -euo pipefail
-          curl -Lf "https://ffmpeg.org/releases/ffmpeg-${FFMPEG_VERSION}.tar.bz2" | tar -jx
-          cd "ffmpeg-${FFMPEG_VERSION}"
-          ./configure \
-            --prefix=/mingw64 \
-            --disable-debug \
-            --disable-doc \
-            --disable-ffplay \
-            --enable-ffprobe \
-            --enable-gpl \
-            --enable-version3 \
-            --enable-cairo \
-            --enable-d3d11va \
-            --enable-dxva2 \
-            --enable-libaom \
-            --enable-libass \
-            --enable-libdav1d \
-            --enable-libfontconfig \
-            --enable-libfreetype \
-            --enable-libfribidi \
-            --enable-libharfbuzz \
-            --enable-libjxl \
-            --enable-libkvazaar \
-            --enable-libmp3lame \
-            --enable-libopencore-amrnb \
-            --enable-libopencore-amrwb \
-            --enable-libopenjpeg \
-            --enable-libopus \
-            --enable-libplacebo \
-            --enable-libshaderc \
-            --enable-libsrt \
-            --enable-libsvtav1 \
-            --enable-libtheora \
-            --enable-libvorbis \
-            --enable-libvpx \
-            --enable-libwebp \
-            --enable-libx264 \
-            --enable-libx265 \
-            --enable-libxml2 \
-            --enable-libxvid \
-            --enable-libzimg \
-            --enable-nvdec \
-            --enable-nvenc \
-            --enable-openssl \
-            --enable-vulkan
-          make -j"$(nproc)"
+          rm -rf "$WORK"
+          git clone https://github.com/BtbN/FFmpeg-Builds.git "$WORK"
+          git -C "$WORK" -c advice.detachedHead=false checkout "$FFBUILDS_REF"
+          cp "$GITHUB_WORKSPACE"/images/win/ffmpeg-builds/scripts.d/*.sh "$WORK/scripts.d/"
+          cd "$WORK"
+          ./makeimage.sh win64 gpl 8.1
+          GIT_BRANCH_OVERRIDE="$FFTAG" ./build.sh win64 gpl 8.1
 
-      - name: Package win-x64
+      - name: Repackage to ErsatzRS layout
+        # BtbN emits <build-name>/bin/{ffmpeg,ffprobe}.exe; ErsatzRS expects the
+        # exes at the top of ersatzrs-ffmpeg-<version>-win-x64/. The static build
+        # has no DLLs to bundle.
+        env:
+          WORK: ${{ runner.temp }}/ffmpeg-builds
+          OUTDIR: ${{ runner.temp }}
+          VERSION: ${{ steps.ver.outputs.version }}
         run: |
           set -euo pipefail
-          ver='${{ steps.ver.outputs.version }}'
-          dest="ersatzrs-ffmpeg-${ver}-win-x64"
-          rm -rf "$dest" && mkdir -p "$dest"
-          cp "ffmpeg-${FFMPEG_VERSION}/ffmpeg.exe" "ffmpeg-${FFMPEG_VERSION}/ffprobe.exe" "$dest/"
-          # Bundle the full DLL closure from /mingw64 so the package runs without MSYS2.
-          for exe in "$dest"/*.exe; do
-            ldd "$exe" | awk '/\/mingw64\/bin\// {print $3}' | sort -u | \
-              while read -r dll; do [ -f "$dll" ] && cp -u "$dll" "$dest/" || true; done
-          done
-          zip -r "${dest}.zip" "$dest"
-          sha256sum "${dest}.zip" > "${dest}.zip.sha256"
+          src_zip="$(ls "$WORK"/artifacts/*win64-gpl*.zip | head -n1)"
+          tmp="$(mktemp -d)"
+          unzip -q "$src_zip" -d "$tmp"
+          dest="ersatzrs-ffmpeg-${VERSION}-win-x64"
+          rm -rf "${OUTDIR:?}/$dest" && mkdir -p "$OUTDIR/$dest"
+          find "$tmp" -name ffmpeg.exe  -exec cp {} "$OUTDIR/$dest/" \;
+          find "$tmp" -name ffprobe.exe -exec cp {} "$OUTDIR/$dest/" \;
+          find "$tmp" -iname 'LICENSE*'  -exec cp {} "$OUTDIR/$dest/" \;
+          test -f "$OUTDIR/$dest/ffmpeg.exe" && test -f "$OUTDIR/$dest/ffprobe.exe"
+          ( cd "$OUTDIR" && zip -r "${dest}.zip" "$dest" \
+              && sha256sum "${dest}.zip" > "${dest}.zip.sha256" )
+          rm -rf "$tmp" "$OUTDIR/$dest"
 
       - name: Upload win-x64 artifact
         uses: actions/upload-artifact@v4
         with:
           name: win-x64
-          path: ersatzrs-ffmpeg-*-win-x64.zip*
+          path: ${{ runner.temp }}/ersatzrs-ffmpeg-*-win-x64.zip*
           if-no-files-found: error
 
   release:
