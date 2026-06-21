@@ -179,8 +179,11 @@ jobs:
           find "$tmp" -name ffprobe.exe -exec cp {} "$OUTDIR/$dest/" \;
           find "$tmp" -iname 'LICENSE*'  -exec cp {} "$OUTDIR/$dest/" \;
           test -f "$OUTDIR/$dest/ffmpeg.exe" && test -f "$OUTDIR/$dest/ffprobe.exe"
-          ( cd "$OUTDIR" && zip -r "${dest}.zip" "$dest" \
-              && sha256sum "${dest}.zip" > "${dest}.zip.sha256" )
+          # The Linux release runner has `unzip` but not `zip`; use python3
+          # (present as /usr/bin/python3) to create the archive instead.
+          ( cd "$OUTDIR"
+            python3 -c "import shutil,sys; shutil.make_archive(sys.argv[1], 'zip', root_dir='.', base_dir=sys.argv[1])" "$dest"
+            sha256sum "${dest}.zip" > "${dest}.zip.sha256" )
           rm -rf "$tmp" "$OUTDIR/$dest"
 
       - name: Upload win-x64 artifact
