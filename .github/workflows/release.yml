@@ -210,11 +210,28 @@ jobs:
     permissions:
       contents: write
     steps:
-      - name: Download artifacts
-        uses: actions/download-artifact@v4
-        with:
-          path: dist
-          merge-multiple: true
+      - name: Download build artifacts
+        # actions/download-artifact@v4 has failed on this self-hosted runner
+        # ("Artifact download failed after 5 retries", v1.0.0). Use the gh CLI
+        # instead — it pulls via the API (a different transport than the
+        # artifact backend) and is the same tool the publish step already
+        # relies on — wrapped in an explicit retry loop. gh places each
+        # artifact in dist/<artifact-name>/.
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          ok=0
+          for attempt in 1 2 3 4 5; do
+            rm -rf dist && mkdir -p dist
+            if gh run download "$GITHUB_RUN_ID" --repo "$GITHUB_REPOSITORY" --dir dist; then
+              ok=1; break
+            fi
+            echo "download attempt ${attempt}/5 failed; retrying in $((attempt*10))s" >&2
+            sleep $((attempt*10))
+          done
+          [ "$ok" = 1 ] || { echo "gh run download failed after 5 attempts" >&2; exit 1; }
+          find dist -type f | sort
 
       - name: Create / update GitHub release
         env:
@@ -222,10 +239,13 @@ jobs:
           TAG: ${{ github.ref_name }}
         run: |
           set -euo pipefail
-          tag="$TAG"
-          gh release view "$tag" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1 \
-            && gh release upload "$tag" dist/* --repo "$GITHUB_REPOSITORY" --clobber \
-            || gh release create "$tag" dist/* \
-                 --repo "$GITHUB_REPOSITORY" \
-                 --title "$tag" \
-                 --notes "FFmpeg ${FFMPEG_VERSION} for ErsatzRS (drawvg/cairo, libsvtav1, libjxl, zimg). RIDs: linux-x64, win-x64."
+          mapfile -t files < <(find dist -type f | sort)
+          [ "${#files[@]}" -gt 0 ] || { echo "no artifact files downloaded" >&2; exit 1; }
+          if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release upload "$TAG" "${files[@]}" --repo "$GITHUB_REPOSITORY" --clobber
+          else
+            gh release create "$TAG" "${files[@]}" \
+              --repo "$GITHUB_REPOSITORY" \
+              --title "$TAG" \
+              --notes "FFmpeg ${FFMPEG_VERSION} for ErsatzRS (drawvg/cairo, libsvtav1, libjxl, zimg). RIDs: linux-x64, win-x64."
+          fi
