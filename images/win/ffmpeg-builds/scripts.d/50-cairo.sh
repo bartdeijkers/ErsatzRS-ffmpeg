@@ -64,6 +64,17 @@ ffbuild_dockerbuild() {
     meson setup "${myconf[@]}" ..
     ninja -j"$(nproc)"
     DESTDIR="$FFBUILD_DESTDIR" ninja install
+
+    # cairo.h marks its API as __declspec(dllimport) on Windows unless
+    # CAIRO_WIN32_STATIC_BUILD is defined. Cairo defines it only for its own
+    # compilation, not in the installed cairo.pc, so static consumers (FFmpeg's
+    # configure) compile against the dllimport decl and fail to link the static
+    # libcairo.a (undefined reference to __imp_cairo_create). Propagate the
+    # macro through the pkg-config Cflags.
+    if [[ $TARGET == win* ]]; then
+        sed -i 's/^Cflags:/Cflags: -DCAIRO_WIN32_STATIC_BUILD/' \
+            "$FFBUILD_DESTPREFIX"/lib/pkgconfig/cairo.pc
+    fi
 }
 
 ffbuild_configure() {
