@@ -146,7 +146,8 @@ jobs:
         # Docker image; build.sh then statically links FFmpeg against them.
         # The `8.1` addin sets FFmpeg version gating; GIT_BRANCH_OVERRIDE pins
         # the exact upstream release tag (n8.1.2). Our cairo/pixman overrides
-        # (which upstream lacks) are dropped into scripts.d/ first.
+        # (which upstream lacks) are dropped into scripts.d/ first, and cairo is
+        # registered in the build graph (see below).
         env:
           WORK: ${{ runner.temp }}/ffmpeg-builds
           FFTAG: n${{ env.FFMPEG_VERSION }}
@@ -156,6 +157,13 @@ jobs:
           git clone https://github.com/BtbN/FFmpeg-Builds.git "$WORK"
           git -C "$WORK" -c advice.detachedHead=false checkout "$FFBUILDS_REF"
           cp "$GITHUB_WORKSPACE"/images/win/ffmpeg-builds/scripts.d/*.sh "$WORK/scripts.d/"
+          # Register cairo in the build graph. BtbN's entry stage (zz-final.sh)
+          # hard-codes the dependency list that gets built; without this our
+          # cairo/pixman scripts are copied in but never reached, so
+          # --enable-cairo silently drops out. pixman follows as cairo's dep.
+          grep -q 'echo cairo' "$WORK/scripts.d/zz-final.sh" \
+            || sed -i 's/^\( *\)echo rpath$/\1echo cairo\n\1echo rpath/' "$WORK/scripts.d/zz-final.sh"
+          grep -q 'echo cairo' "$WORK/scripts.d/zz-final.sh"  # fail loudly if the anchor moved
           cd "$WORK"
           ./makeimage.sh win64 gpl 8.1
           GIT_BRANCH_OVERRIDE="$FFTAG" ./build.sh win64 gpl 8.1

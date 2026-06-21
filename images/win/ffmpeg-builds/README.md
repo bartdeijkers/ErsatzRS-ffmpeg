@@ -9,7 +9,12 @@ no accompanying DLLs — matching the layout of the upstream BtbN win64 builds.
 `.github/workflows/release.yml` (`win-x64` job):
 
 1. clones FFmpeg-Builds at a pinned commit,
-2. copies `scripts.d/*.sh` from here into the cloned tree,
+2. copies `scripts.d/*.sh` from here into the cloned tree, and registers
+   `cairo` in `scripts.d/zz-final.sh` — that entry stage hard-codes the list of
+   dependencies the image builds, so without this our cairo/pixman scripts are
+   present but never reached and `--enable-cairo` silently drops out (pixman is
+   pulled in as cairo's dependency). The workflow fails loudly if the `sed`
+   anchor moves on a pin bump,
 3. runs `./makeimage.sh win64 gpl 8.1` then
    `GIT_BRANCH_OVERRIDE=n<FFMPEG_VERSION> ./build.sh win64 gpl 8.1`
    (the `8.1` addin sets the version gating; `GIT_BRANCH_OVERRIDE` pins the
