@@ -1,8 +1,8 @@
 #!/bin/bash
-# Static pixman for the win-x64 FFmpeg-Builds image. Required by cairo, which
-# BtbN/FFmpeg-Builds does not ship (we add cairo for FFmpeg's --enable-cairo,
-# matching the linux-x64 package). Copied into the cloned FFmpeg-Builds
-# scripts.d/ by .github/workflows/release.yml before makeimage/build.
+# Static pixman for the static FFmpeg-Builds images (linux-x64 and win-x64).
+# Required by cairo, which BtbN/FFmpeg-Builds does not ship (we add cairo for
+# FFmpeg's --enable-cairo). Copied into the cloned FFmpeg-Builds scripts.d/ by
+# .github/workflows/release.yml before makeimage/build.
 
 SCRIPT_REPO="https://gitlab.freedesktop.org/pixman/pixman.git"
 SCRIPT_COMMIT="pixman-0.46.4"
