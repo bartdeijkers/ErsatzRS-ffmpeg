@@ -1,0 +1,52 @@
+# Static FFmpeg builds (BtbN/FFmpeg-Builds overrides)
+
+Both the `linux-x64` and `win-x64` release packages are produced by building a
+**fully static** FFmpeg with [BtbN/FFmpeg-Builds](https://github.com/BtbN/FFmpeg-Builds)
+on the Linux self-hosted runner (Docker). Each package ships self-contained
+executables with no accompanying shared libraries / DLLs.
+
+Static linking is deliberate. The `linux-x64` package used to be extracted from
+the runtime Docker image by copying ffmpeg's whole `ldd` closure (including
+`libc.so.6`) into a `lib/` directory and relying on `LD_LIBRARY_PATH`. That
+bundles the *build's* libc but runs it under the *host's* dynamic loader; when a
+host glibc is older than the build's, the program aborts with
+`libc.so.6: undefined symbol: __tunable_is_initialized, version GLIBC_PRIVATE`
+(libc and `ld-linux` must come from the same glibc, and the loader was never
+bundled). A static build removes that coupling entirely.
+
+`.github/workflows/release.yml` (`linux-x64` and `win-x64` jobs) each:
+
+1. clone FFmpeg-Builds at a pinned commit (`FFBUILDS_REF`, kept in lock-step
+   across both jobs),
+2. copy `scripts.d/*.sh` from here into the cloned tree, and register `cairo` in
+   `scripts.d/zz-final.sh` — that entry stage hard-codes the list of
+   dependencies the image builds, so without this our cairo/pixman scripts are
+   present but never reached and `--enable-cairo` silently drops out (pixman is
+   pulled in as cairo's dependency). The workflow fails loudly if the `sed`
+   anchor moves on a pin bump,
+3. run `./makeimage.sh <target> gpl 8.1` then
+   `GIT_BRANCH_OVERRIDE=n<FFMPEG_VERSION> ./build.sh <target> gpl 8.1`
+   (`<target>` is `linux64` / `win64`; the `8.1` addin sets the version gating;
+   `GIT_BRANCH_OVERRIDE` pins the exact FFmpeg release tag),
+4. repackage the resulting artifact into the ErsatzRS layout:
+   - linux-x64: `ersatzrs-ffmpeg-<version>-linux-x64/ffmpeg` + `ffprobe`
+     (tar.gz). The repackage step asserts the binaries have no `PT_INTERP`
+     segment, so a non-static build fails the release loudly.
+   - win-x64: `ersatzrs-ffmpeg-<version>-win-x64/ffmpeg.exe` + `ffprobe.exe`
+     (zip).
+
+## Why these overrides exist
+
+BtbN's `linux64-gpl` / `win64-gpl` variants build a superset of our codec set
+**except cairo**, which ErsatzRS needs (FFmpeg's `--enable-cairo`). Cairo and its
+`pixman` dependency are not in upstream `scripts.d/`, so they are added here and
+are written to work for both `win*` and `linux*` targets:
+
+- `47-pixman.sh` — static pixman (cairo dependency; no FFmpeg flag).
+- `50-cairo.sh` — minimal static cairo; emits `--enable-cairo`. `--enable-cairo`
+  gates only FFmpeg's `drawvg` filter, which uses core cairo (image surface +
+  paths/patterns) and no text/PNG/SVG, so all optional cairo backends are
+  disabled and cairo depends only on pixman.
+
+Pinned versions are bumped here when upstream FFmpeg-Builds or these libraries
+are updated.

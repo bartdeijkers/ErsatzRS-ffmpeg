@@ -8,9 +8,11 @@ name: Release
 # v1.0.0 is intentionally scoped to two RIDs only: linux-x64 and win-x64.
 # (arm64/arm-v7/osx are produced by the continuous Docker CI / future work.)
 #
-# Runs on the self-hosted Linux release runner. linux-x64 is extracted from the
-# runtime Docker image; win-x64 is statically cross-compiled with
-# BtbN/FFmpeg-Builds (Docker) — see images/win/ffmpeg-builds/. The Windows
+# Runs on the self-hosted Linux release runner. Both linux-x64 and win-x64 are
+# statically built with BtbN/FFmpeg-Builds (Docker) — see images/ffmpeg-builds/.
+# Static linking means each package ships self-contained executables with no
+# bundled shared-library closure, so there is no glibc/loader mismatch on the
+# host (the failure mode of the earlier ldd-closure bundling). The Windows
 # self-hosted runner is no longer used for releases.
 #   linux-x64 -> [self-hosted, ersatzrs-linux-release]
 #   win-x64   -> [self-hosted, ersatzrs-linux-release]
@@ -26,8 +28,6 @@ on:
         required: true
 
 env:
-  REGISTRY: ghcr.io
-  IMAGE_NAME: ghcr.io/bartdeijkers/ersatzrs-ffmpeg
   # Upstream FFmpeg version these packages contain (independent of the repo
   # release tag, which is the v*.*.* git tag).
   FFMPEG_VERSION: 8.1.2
@@ -36,9 +36,13 @@ jobs:
   linux-x64:
     name: Build linux-x64 package
     runs-on: [self-hosted, ersatzrs-linux-release]
-    permissions:
-      contents: read
-      packages: write
+    # No registry login / image push here: the ghcr ersatzrs-ffmpeg image is
+    # built and pushed by multi-platform.yml. This job only produces the static
+    # linux-x64 release package (symmetric with win-x64).
+    env:
+      # Pinned FFmpeg-Builds commit (keep in lock-step with the win-x64 job;
+      # see images/ffmpeg-builds/README.md).
+      FFBUILDS_REF: bfcf840002eb1cf68ed626657db2d250cf62e8a2
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -51,66 +55,73 @@ jobs:
           echo "tag=${REF}" >> "$GITHUB_OUTPUT"
           echo "version=${REF#v}" >> "$GITHUB_OUTPUT"
 
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
-      - name: Log in to container registry
-        uses: docker/login-action@v3
-        with:
-          registry: ${{ env.REGISTRY }}
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Build and push linux/amd64 image
-        uses: docker/build-push-action@v6
-        with:
-          context: .
-          file: ./images/linux/amd64/Dockerfile
-          platforms: linux/amd64
-          load: true
-          push: true
-          tags: |
-            ${{ env.IMAGE_NAME }}:${{ steps.ver.outputs.version }}
-            ${{ env.IMAGE_NAME }}:${{ env.FFMPEG_VERSION }}
-            ${{ env.IMAGE_NAME }}:latest
-
-      - name: Stage self-contained linux-x64 package
-        # Extract ffmpeg/ffprobe plus their full shared-library closure from the
-        # runtime image so the package runs standalone (ErsatzRS sets
-        # LD_LIBRARY_PATH=<dir>/lib). Requires a host glibc >= the build's.
-        # Stage under RUNNER_TEMP (outside the checked-out repo) and run the
-        # container as the runner user, so no root-owned files land in the
-        # workspace to break the next Checkout on this persistent self-hosted
-        # runner.
+      - name: Build static linux-x64 FFmpeg via BtbN FFmpeg-Builds
+        # Mirror the win-x64 job: build a fully static FFmpeg so the package
+        # ships self-contained executables with no shared-library closure. The
+        # previous approach copied ffmpeg's whole ldd closure (including
+        # libc.so.6) out of the runtime image and relied on
+        # LD_LIBRARY_PATH=<dir>/lib; that bundles the build's libc but runs it
+        # under the *host's* dynamic loader, so a host glibc older than the
+        # build's fails with `libc.so.6: undefined symbol __tunable_is_initialized,
+        # version GLIBC_PRIVATE`. A static build removes that coupling entirely.
+        # Our cairo/pixman overrides (which upstream lacks) are dropped into
+        # scripts.d/ first, and cairo is registered in the build graph (see
+        # below) — identical to win-x64.
         env:
-          IMG: ${{ env.IMAGE_NAME }}:${{ steps.ver.outputs.version }}
-          STAGE: ${{ runner.temp }}/lx-out
+          WORK: ${{ runner.temp }}/ffmpeg-builds-linux
+          FFTAG: n${{ env.FFMPEG_VERSION }}
         run: |
           set -euo pipefail
-          rm -rf "$STAGE" && mkdir -p "$STAGE"
-          docker run --rm --user "$(id -u):$(id -g)" --entrypoint bash \
-            -v "$STAGE:/out" \
-            "$IMG" -c '
-              set -e
-              dest=/out/ffmpeg
-              mkdir -p "$dest/lib"
-              cp /usr/local/bin/ffmpeg /usr/local/bin/ffprobe "$dest/"
-              for b in "$dest/ffmpeg" "$dest/ffprobe"; do
-                ldd "$b" | awk "/=> \// {print \$3}" | sort -u | \
-                  while read -r so; do [ -f "$so" ] && cp -Lu "$so" "$dest/lib/" || true; done
-              done
-            '
+          rm -rf "$WORK"
+          git clone https://github.com/BtbN/FFmpeg-Builds.git "$WORK"
+          git -C "$WORK" -c advice.detachedHead=false checkout "$FFBUILDS_REF"
+          cp "$GITHUB_WORKSPACE"/images/ffmpeg-builds/scripts.d/*.sh "$WORK/scripts.d/"
+          # Register cairo in the build graph. BtbN's entry stage (zz-final.sh)
+          # hard-codes the dependency list that gets built; without this our
+          # cairo/pixman scripts are copied in but never reached, so
+          # --enable-cairo silently drops out. pixman follows as cairo's dep.
+          grep -q 'echo cairo' "$WORK/scripts.d/zz-final.sh" \
+            || sed -i 's/^\( *\)echo rpath$/\1echo cairo\n\1echo rpath/' "$WORK/scripts.d/zz-final.sh"
+          grep -q 'echo cairo' "$WORK/scripts.d/zz-final.sh"  # fail loudly if the anchor moved
+          cd "$WORK"
+          ./makeimage.sh linux64 gpl 8.1
+          GIT_BRANCH_OVERRIDE="$FFTAG" ./build.sh linux64 gpl 8.1
 
-      - name: Archive linux-x64 package
+      - name: Repackage to ErsatzRS layout
+        # BtbN emits <build-name>/bin/{ffmpeg,ffprobe} inside a .tar.xz; ErsatzRS
+        # expects the executables at the top of
+        # ersatzrs-ffmpeg-<version>-linux-x64/. The static build has no shared
+        # libraries to bundle, so there is no lib/ directory and ErsatzRS runs
+        # the executables directly (no LD_LIBRARY_PATH launcher wrapper).
         env:
-          STAGE: ${{ runner.temp }}/lx-out
+          WORK: ${{ runner.temp }}/ffmpeg-builds-linux
           OUTDIR: ${{ runner.temp }}
           VERSION: ${{ steps.ver.outputs.version }}
         run: |
           set -euo pipefail
-          pkg="ersatzrs-ffmpeg-${VERSION}-linux-x64.tar.gz"
-          tar -C "$STAGE" -czf "$OUTDIR/$pkg" ffmpeg
+          src_archive="$(ls "$WORK"/artifacts/*linux64-gpl*.tar.xz | head -n1)"
+          tmp="$(mktemp -d)"
+          tar -C "$tmp" -xf "$src_archive"
+          dest="ersatzrs-ffmpeg-${VERSION}-linux-x64"
+          rm -rf "${OUTDIR:?}/$dest" && mkdir -p "$OUTDIR/$dest"
+          find "$tmp" -type f -name ffmpeg  -exec cp {} "$OUTDIR/$dest/" \;
+          find "$tmp" -type f -name ffprobe -exec cp {} "$OUTDIR/$dest/" \;
+          find "$tmp" -iname 'LICENSE*'     -exec cp {} "$OUTDIR/$dest/" \;
+          chmod +x "$OUTDIR/$dest/ffmpeg" "$OUTDIR/$dest/ffprobe"
+          test -f "$OUTDIR/$dest/ffmpeg" && test -f "$OUTDIR/$dest/ffprobe"
+          # Reject any package that still has a dynamic-loader/glibc coupling:
+          # a static build must not request an interpreter (no INTERP segment).
+          for b in "$OUTDIR/$dest/ffmpeg" "$OUTDIR/$dest/ffprobe"; do
+            if readelf -l "$b" | grep -q 'INTERP'; then
+              echo "ERROR: $b is dynamically linked (has PT_INTERP); expected a static build" >&2
+              readelf -d "$b" | grep -i 'NEEDED' >&2 || true
+              exit 1
+            fi
+          done
+          pkg="${dest}.tar.gz"
+          tar -C "$OUTDIR" -czf "$OUTDIR/$pkg" "$dest"
           ( cd "$OUTDIR" && sha256sum "$pkg" > "$pkg.sha256" )
+          rm -rf "$tmp" "$OUTDIR/$dest"
 
       - name: Upload linux-x64 artifact
         uses: actions/upload-artifact@v4
@@ -126,8 +137,8 @@ jobs:
     # Runs on the Linux release runner (Docker), not the Windows runner.
     runs-on: [self-hosted, ersatzrs-linux-release]
     env:
-      # Pinned FFmpeg-Builds commit (bump deliberately; see
-      # images/win/ffmpeg-builds/README.md).
+      # Pinned FFmpeg-Builds commit (bump deliberately, in lock-step with the
+      # linux-x64 job; see images/ffmpeg-builds/README.md).
       FFBUILDS_REF: bfcf840002eb1cf68ed626657db2d250cf62e8a2
     steps:
       - name: Checkout
@@ -156,7 +167,7 @@ jobs:
           rm -rf "$WORK"
           git clone https://github.com/BtbN/FFmpeg-Builds.git "$WORK"
           git -C "$WORK" -c advice.detachedHead=false checkout "$FFBUILDS_REF"
-          cp "$GITHUB_WORKSPACE"/images/win/ffmpeg-builds/scripts.d/*.sh "$WORK/scripts.d/"
+          cp "$GITHUB_WORKSPACE"/images/ffmpeg-builds/scripts.d/*.sh "$WORK/scripts.d/"
           # Register cairo in the build graph. BtbN's entry stage (zz-final.sh)
           # hard-codes the dependency list that gets built; without this our
           # cairo/pixman scripts are copied in but never reached, so

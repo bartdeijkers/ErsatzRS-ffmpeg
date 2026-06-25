@@ -1,7 +1,7 @@
 #!/bin/bash
-# Static cairo for the win-x64 FFmpeg-Builds image, so the package can be built
-# with FFmpeg's --enable-cairo (parity with the linux-x64 Dockerfile). BtbN
-# ships neither cairo nor its pixman dependency, so both are added as overrides
+# Static cairo for the static FFmpeg-Builds images (linux-x64 and win-x64), so
+# the packages can be built with FFmpeg's --enable-cairo. BtbN ships neither
+# cairo nor its pixman dependency, so both are added as overrides
 # (see 47-pixman.sh).
 #
 # --enable-cairo gates exactly one FFmpeg component: the `drawvg` filter
