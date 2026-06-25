@@ -15,10 +15,13 @@ name: Release
 # target, so it needs a separate static cross-build.
 #
 # Runs on the self-hosted Linux release runner. Both linux-x64 and win-x64 are
-# statically built with BtbN/FFmpeg-Builds (Docker) — see images/ffmpeg-builds/.
-# Static linking means each package ships self-contained executables with no
-# bundled shared-library closure, so there is no glibc/loader mismatch on the
-# host (the failure mode of the earlier ldd-closure bundling). The Windows
+# built with BtbN/FFmpeg-Builds (Docker) — see images/ffmpeg-builds/. win-x64 is
+# fully static. linux-x64 statically links every codec but links glibc
+# dynamically (BtbN has no fully-static linux target); crucially it bundles no
+# shared libraries, so it runs against the host's own glibc — eliminating the
+# bundled-libc / host-loader mismatch of the earlier ldd-closure packaging. The
+# linux repackage step then smoke-tests the binaries on debian:bookworm-slim
+# (the ErsatzRS runtime baseline) to guarantee they run there. The Windows
 # self-hosted runner is no longer used for releases.
 #   linux-x64 -> [self-hosted, ersatzrs-linux-release]
 #   win-x64   -> [self-hosted, ersatzrs-linux-release]
@@ -61,18 +64,20 @@ jobs:
           echo "tag=${REF}" >> "$GITHUB_OUTPUT"
           echo "version=${REF#v}" >> "$GITHUB_OUTPUT"
 
-      - name: Build static linux-x64 FFmpeg via BtbN FFmpeg-Builds
-        # Mirror the win-x64 job: build a fully static FFmpeg so the package
-        # ships self-contained executables with no shared-library closure. The
-        # previous approach copied ffmpeg's whole ldd closure (including
-        # libc.so.6) out of the runtime image and relied on
-        # LD_LIBRARY_PATH=<dir>/lib; that bundles the build's libc but runs it
-        # under the *host's* dynamic loader, so a host glibc older than the
-        # build's fails with `libc.so.6: undefined symbol __tunable_is_initialized,
-        # version GLIBC_PRIVATE`. A static build removes that coupling entirely.
-        # Our cairo/pixman overrides (which upstream lacks) are dropped into
-        # scripts.d/ first, and cairo is registered in the build graph (see
-        # below) — identical to win-x64.
+      - name: Build linux-x64 FFmpeg via BtbN FFmpeg-Builds
+        # Mirror the win-x64 job's toolchain. BtbN linux64 statically links every
+        # codec but links glibc dynamically (there is no fully-static linux64
+        # target), so the package bundles NO shared libraries and runs against
+        # the host's own glibc. That is what fixes the original bug: the previous
+        # approach copied ffmpeg's whole ldd closure (including libc.so.6) out of
+        # the runtime image and relied on LD_LIBRARY_PATH=<dir>/lib, which loads
+        # the build's libc under the *host's* dynamic loader, so a host glibc
+        # older than the build's fails with `libc.so.6: undefined symbol
+        # __tunable_is_initialized, version GLIBC_PRIVATE`. Bundling nothing
+        # removes that coupling; the repackage step then verifies the binaries
+        # run on our glibc baseline. Our cairo/pixman overrides (which upstream
+        # lacks) are dropped into scripts.d/ first, and cairo is registered in
+        # the build graph (see below) — identical to win-x64.
         env:
           WORK: ${{ runner.temp }}/ffmpeg-builds-linux
           FFTAG: n${{ env.FFMPEG_VERSION }}
@@ -96,9 +101,10 @@ jobs:
       - name: Repackage to ErsatzRS layout
         # BtbN emits <build-name>/bin/{ffmpeg,ffprobe} inside a .tar.xz; ErsatzRS
         # expects the executables at the top of
-        # ersatzrs-ffmpeg-<version>-linux-x64/. The static build has no shared
-        # libraries to bundle, so there is no lib/ directory and ErsatzRS runs
-        # the executables directly (no LD_LIBRARY_PATH launcher wrapper).
+        # ersatzrs-ffmpeg-<version>-linux-x64/. The build bundles no shared
+        # libraries (codecs are static; glibc is the host's), so there is no
+        # lib/ directory and ErsatzRS runs the executables directly (no
+        # LD_LIBRARY_PATH launcher wrapper).
         env:
           WORK: ${{ runner.temp }}/ffmpeg-builds-linux
           OUTDIR: ${{ runner.temp }}
@@ -115,14 +121,19 @@ jobs:
           find "$tmp" -iname 'LICENSE*'     -exec cp {} "$OUTDIR/$dest/" \;
           chmod +x "$OUTDIR/$dest/ffmpeg" "$OUTDIR/$dest/ffprobe"
           test -f "$OUTDIR/$dest/ffmpeg" && test -f "$OUTDIR/$dest/ffprobe"
-          # Reject any package that still has a dynamic-loader/glibc coupling:
-          # a static build must not request an interpreter (no INTERP segment).
-          for b in "$OUTDIR/$dest/ffmpeg" "$OUTDIR/$dest/ffprobe"; do
-            if readelf -l "$b" | grep -q 'INTERP'; then
-              echo "ERROR: $b is dynamically linked (has PT_INTERP); expected a static build" >&2
-              readelf -d "$b" | grep -i 'NEEDED' >&2 || true
-              exit 1
-            fi
+          # Portability gate. BtbN linux64 statically links every codec but links
+          # glibc dynamically, so the package bundles no shared libraries and runs
+          # against the host's own glibc — there is no bundled-libc / host-loader
+          # mismatch (the bug this release fixed). The remaining requirement is a
+          # recent-enough host glibc. ErsatzRS ships on debian:bookworm-slim
+          # (glibc 2.36) and downloads this package onto arbitrary hosts, so prove
+          # the binaries actually execute on that clean baseline. This catches a
+          # glibc bump in the BtbN toolchain that would otherwise only surface at
+          # user runtime as `GLIBC_2.xx not found`. (bookworm-slim ships libc6 and
+          # libgcc-s1, the only non-static deps; a missing one fails here loudly.)
+          for tool in ffmpeg ffprobe; do
+            docker run --rm -v "$OUTDIR/$dest:/pkg:ro" debian:bookworm-slim \
+              "/pkg/$tool" -version
           done
           pkg="${dest}.tar.gz"
           tar -C "$OUTDIR" -czf "$OUTDIR/$pkg" "$dest"

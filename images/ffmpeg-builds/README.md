@@ -1,18 +1,25 @@
-# Static FFmpeg builds (BtbN/FFmpeg-Builds overrides)
+# FFmpeg builds (BtbN/FFmpeg-Builds overrides)
 
-Both the `linux-x64` and `win-x64` release packages are produced by building a
-**fully static** FFmpeg with [BtbN/FFmpeg-Builds](https://github.com/BtbN/FFmpeg-Builds)
-on the Linux self-hosted runner (Docker). Each package ships self-contained
-executables with no accompanying shared libraries / DLLs.
+The `linux-x64` and `win-x64` release packages are built with
+[BtbN/FFmpeg-Builds](https://github.com/BtbN/FFmpeg-Builds) on the Linux
+self-hosted runner (Docker):
 
-Static linking is deliberate. The `linux-x64` package used to be extracted from
-the runtime Docker image by copying ffmpeg's whole `ldd` closure (including
-`libc.so.6`) into a `lib/` directory and relying on `LD_LIBRARY_PATH`. That
-bundles the *build's* libc but runs it under the *host's* dynamic loader; when a
-host glibc is older than the build's, the program aborts with
+- **win-x64** is **fully static** — two self-contained executables, no DLLs.
+- **linux-x64** statically links every codec but links **glibc dynamically**
+  (BtbN has no fully-static linux target). The package bundles **no** shared
+  libraries; the binaries use the host's own glibc.
+
+The key point is that **linux-x64 bundles nothing**. The package used to be
+extracted from the runtime Docker image by copying ffmpeg's whole `ldd` closure
+(including `libc.so.6`) into a `lib/` directory and relying on
+`LD_LIBRARY_PATH`. That bundles the *build's* libc but runs it under the *host's*
+dynamic loader; when a host glibc is older than the build's, the program aborts
+with
 `libc.so.6: undefined symbol: __tunable_is_initialized, version GLIBC_PRIVATE`
 (libc and `ld-linux` must come from the same glibc, and the loader was never
-bundled). A static build removes that coupling entirely.
+bundled). Bundling nothing and using the host glibc removes that coupling. The
+only remaining requirement — a recent-enough host glibc — is verified at build
+time (see below).
 
 `.github/workflows/release.yml` (`linux-x64` and `win-x64` jobs) each:
 
@@ -30,8 +37,10 @@ bundled). A static build removes that coupling entirely.
    `GIT_BRANCH_OVERRIDE` pins the exact FFmpeg release tag),
 4. repackage the resulting artifact into the ErsatzRS layout:
    - linux-x64: `ersatzrs-ffmpeg-<version>-linux-x64/ffmpeg` + `ffprobe`
-     (tar.gz). The repackage step asserts the binaries have no `PT_INTERP`
-     segment, so a non-static build fails the release loudly.
+     (tar.gz). The repackage step then runs both binaries inside a clean
+     `debian:bookworm-slim` (glibc 2.36, the ErsatzRS runtime baseline); if the
+     BtbN toolchain ever needs a newer glibc, the release fails loudly here
+     instead of at user runtime as `GLIBC_2.xx not found`.
    - win-x64: `ersatzrs-ffmpeg-<version>-win-x64/ffmpeg.exe` + `ffprobe.exe`
      (zip).
 
