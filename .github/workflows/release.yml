@@ -5,8 +5,14 @@ name: Release
 # workflow produces the per-RID FFmpeg packages that ErsatzRS downloads at
 # startup (ADR-0008) and attaches them to the GitHub Release for the tag.
 #
-# v1.0.0 is intentionally scoped to two RIDs only: linux-x64 and win-x64.
-# (arm64/arm-v7/osx are produced by the continuous Docker CI / future work.)
+# Scoped to two RIDs only: linux-x64 and win-x64. arm64/arm-v7/osx packages are
+# future work. NOTE: the arm Docker images (images/linux/arm*) are fine — they
+# bundle only self-built codec libs (ldd | awk '/local/'), not glibc. But when
+# arm RIDs are added as downloadable release *packages* they MUST be static
+# (never extract the full ldd closure the old linux-x64 way, which bundled
+# libc.so.6 and broke on older host glibc). linux-arm64: BtbN has a `linuxarm64`
+# target — mirror the linux-x64 job. linux-arm (armv7): BtbN has no 32-bit arm
+# target, so it needs a separate static cross-build.
 #
 # Runs on the self-hosted Linux release runner. Both linux-x64 and win-x64 are
 # statically built with BtbN/FFmpeg-Builds (Docker) — see images/ffmpeg-builds/.
