@@ -31,16 +31,18 @@ time (see below).
    present but never reached and `--enable-cairo` silently drops out (pixman is
    pulled in as cairo's dependency). The workflow fails loudly if the `sed`
    anchor moves on a pin bump,
-3. run `./makeimage.sh <target> gpl 8.1` then
-   `GIT_BRANCH_OVERRIDE=n<FFMPEG_VERSION> ./build.sh <target> gpl 8.1`
-   (`<target>` is `linux64` / `win64`; the `8.1` addin sets the version gating;
+3. run `./makeimage.sh <target> gpl 9.0` then
+   `GIT_BRANCH_OVERRIDE=n<FFMPEG_VERSION> ./build.sh <target> gpl 9.0`
+   (`<target>` is `linux64` / `win64`; the `9.0` addin sets the version gating;
    `GIT_BRANCH_OVERRIDE` pins the exact FFmpeg release tag),
 4. repackage the resulting artifact into the ErsatzRS layout:
    - linux-x64: `ersatzrs-ffmpeg-<version>-linux-x64/ffmpeg` + `ffprobe`
      (tar.gz). The repackage step then runs both binaries inside a clean
      `debian:bookworm-slim` (glibc 2.36, the ErsatzRS runtime baseline); if the
      BtbN toolchain ever needs a newer glibc, the release fails loudly here
-     instead of at user runtime as `GLIBC_2.xx not found`.
+     instead of at user runtime as `GLIBC_2.xx not found`. The same gate checks
+     that both tools report `FFMPEG_VERSION` and that FFmpeg exposes `drawvg`
+     with `--enable-cairo` in its build configuration.
    - win-x64: `ersatzrs-ffmpeg-<version>-win-x64/ffmpeg.exe` + `ffprobe.exe`
      (zip).
 

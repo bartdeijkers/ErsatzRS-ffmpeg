@@ -8,7 +8,7 @@ ENV MAKEFLAGS="-j4" \
     PATH="/root/.cargo/bin:${PATH}"
 
 ENV AOM=v3.12.0 \
-    FFMPEG_HARD=8.1.2 \
+    FFMPEG_HARD=9.0 \
     FONTCONFIG=2.16.0 \
     FREETYPE=2.13.3 \
     FRIBIDI=1.0.16 \

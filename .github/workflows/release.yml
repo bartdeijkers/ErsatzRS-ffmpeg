@@ -39,7 +39,7 @@ on:
 env:
   # Upstream FFmpeg version these packages contain (independent of the repo
   # release tag, which is the v*.*.* git tag).
-  FFMPEG_VERSION: 8.1.2
+  FFMPEG_VERSION: 9.0
 
 jobs:
   linux-x64:
@@ -51,7 +51,7 @@ jobs:
     env:
       # Pinned FFmpeg-Builds commit (keep in lock-step with the win-x64 job;
       # see images/ffmpeg-builds/README.md).
-      FFBUILDS_REF: bfcf840002eb1cf68ed626657db2d250cf62e8a2
+      FFBUILDS_REF: d04d5526084bb699ca2b400c32bbab7eb3ebcb4e
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -95,8 +95,8 @@ jobs:
             || sed -i 's/^\( *\)echo rpath$/\1echo cairo\n\1echo rpath/' "$WORK/scripts.d/zz-final.sh"
           grep -q 'echo cairo' "$WORK/scripts.d/zz-final.sh"  # fail loudly if the anchor moved
           cd "$WORK"
-          ./makeimage.sh linux64 gpl 8.1
-          GIT_BRANCH_OVERRIDE="$FFTAG" ./build.sh linux64 gpl 8.1
+          ./makeimage.sh linux64 gpl 9.0
+          GIT_BRANCH_OVERRIDE="$FFTAG" ./build.sh linux64 gpl 9.0
 
       - name: Repackage to ErsatzRS layout
         # BtbN emits <build-name>/bin/{ffmpeg,ffprobe} inside a .tar.xz; ErsatzRS
@@ -131,10 +131,22 @@ jobs:
           # glibc bump in the BtbN toolchain that would otherwise only surface at
           # user runtime as `GLIBC_2.xx not found`. (bookworm-slim ships libc6 and
           # libgcc-s1, the only non-static deps; a missing one fails here loudly.)
+          # Also assert the requested upstream version and ErsatzRS's drawvg
+          # runtime contract so a successful build cannot publish the wrong tag
+          # or silently omit cairo support.
           for tool in ffmpeg ffprobe; do
-            docker run --rm -v "$OUTDIR/$dest:/pkg:ro" debian:bookworm-slim \
-              "/pkg/$tool" -version
+            version_output="$(docker run --rm -v "$OUTDIR/$dest:/pkg:ro" \
+              debian:bookworm-slim "/pkg/$tool" -version)"
+            printf '%s\n' "$version_output"
+            first_line="${version_output%%$'\n'*}"
+            [[ "$first_line" == "$tool version $FFMPEG_VERSION"* ]]
           done
+          filters="$(docker run --rm -v "$OUTDIR/$dest:/pkg:ro" \
+            debian:bookworm-slim /pkg/ffmpeg -hide_banner -filters)"
+          grep -Eq '(^|[[:space:]])drawvg[[:space:]]' <<< "$filters"
+          buildconf="$(docker run --rm -v "$OUTDIR/$dest:/pkg:ro" \
+            debian:bookworm-slim /pkg/ffmpeg -hide_banner -buildconf)"
+          grep -Fq -- '--enable-cairo' <<< "$buildconf"
           pkg="${dest}.tar.gz"
           tar -C "$OUTDIR" -czf "$OUTDIR/$pkg" "$dest"
           ( cd "$OUTDIR" && sha256sum "$pkg" > "$pkg.sha256" )
@@ -156,7 +168,7 @@ jobs:
     env:
       # Pinned FFmpeg-Builds commit (bump deliberately, in lock-step with the
       # linux-x64 job; see images/ffmpeg-builds/README.md).
-      FFBUILDS_REF: bfcf840002eb1cf68ed626657db2d250cf62e8a2
+      FFBUILDS_REF: d04d5526084bb699ca2b400c32bbab7eb3ebcb4e
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -172,8 +184,8 @@ jobs:
       - name: Build static win-x64 FFmpeg via BtbN FFmpeg-Builds
         # makeimage.sh builds the cross toolchain + every dependency into a
         # Docker image; build.sh then statically links FFmpeg against them.
-        # The `8.1` addin sets FFmpeg version gating; GIT_BRANCH_OVERRIDE pins
-        # the exact upstream release tag (n8.1.2). Our cairo/pixman overrides
+        # The `9.0` addin sets FFmpeg version gating; GIT_BRANCH_OVERRIDE pins
+        # the exact upstream release tag (n9.0). Our cairo/pixman overrides
         # (which upstream lacks) are dropped into scripts.d/ first, and cairo is
         # registered in the build graph (see below).
         env:
@@ -193,8 +205,8 @@ jobs:
             || sed -i 's/^\( *\)echo rpath$/\1echo cairo\n\1echo rpath/' "$WORK/scripts.d/zz-final.sh"
           grep -q 'echo cairo' "$WORK/scripts.d/zz-final.sh"  # fail loudly if the anchor moved
           cd "$WORK"
-          ./makeimage.sh win64 gpl 8.1
-          GIT_BRANCH_OVERRIDE="$FFTAG" ./build.sh win64 gpl 8.1
+          ./makeimage.sh win64 gpl 9.0
+          GIT_BRANCH_OVERRIDE="$FFTAG" ./build.sh win64 gpl 9.0
 
       - name: Repackage to ErsatzRS layout
         # BtbN emits <build-name>/bin/{ffmpeg,ffprobe}.exe; ErsatzRS expects the
