@@ -35,6 +35,15 @@ on:
       tag:
         description: 'Release tag to build (e.g. v1.0.0). Dispatch builds the packages but does not publish a release.'
         required: true
+      target:
+        description: 'Package target to build'
+        required: true
+        default: 'all'
+        type: choice
+        options:
+          - all
+          - linux-x64
+          - win-x64
 
 env:
   # Upstream FFmpeg version these packages contain (independent of the repo
@@ -44,6 +53,7 @@ env:
 jobs:
   linux-x64:
     name: Build linux-x64 package
+    if: ${{ github.event_name != 'workflow_dispatch' || github.event.inputs.target == 'all' || github.event.inputs.target == 'linux-x64' }}
     runs-on: [self-hosted, ersatzrs-linux-release]
     # No registry login / image push here: the ghcr ersatzrs-ffmpeg image is
     # built and pushed by multi-platform.yml. This job only produces the static
@@ -161,6 +171,7 @@ jobs:
 
   win-x64:
     name: Build win-x64 package
+    if: ${{ github.event_name != 'workflow_dispatch' || github.event.inputs.target == 'all' || github.event.inputs.target == 'win-x64' }}
     # Statically cross-compiled with BtbN/FFmpeg-Builds (Docker) so the package
     # ships two self-contained executables instead of a thin .exe + DLL closure.
     # Runs on the Linux release runner (Docker), not the Windows runner.
