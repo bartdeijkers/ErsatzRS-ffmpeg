@@ -139,7 +139,7 @@ jobs:
               debian:bookworm-slim "/pkg/$tool" -version)"
             printf '%s\n' "$version_output"
             first_line="${version_output%%$'\n'*}"
-            [[ "$first_line" == "$tool version $FFMPEG_VERSION"* ]]
+            [[ "$first_line" == "$tool version n${FFMPEG_VERSION}"* ]]
           done
           filters="$(docker run --rm -v "$OUTDIR/$dest:/pkg:ro" \
             debian:bookworm-slim /pkg/ffmpeg -hide_banner -filters)"
