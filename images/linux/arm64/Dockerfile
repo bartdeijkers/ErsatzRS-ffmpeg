@@ -10,7 +10,7 @@ ENV AOM=v3.12.0 \
     FFMPEG_HARD=9.0 \
     FONTCONFIG=2.16.0 \
     FREETYPE=2.13.3 \
-    FREETYPE_TAG=VER-2-13-3 \
+    FREETYPE_SHA256=5c3a8e78f7b24c20b25b54ee575d6daa40007a5f4eea2845861c3409b3021747 \
     FRIBIDI=1.0.16 \
     KVAZAAR=2.3.1 \
     LAME=3.100 \
@@ -110,8 +110,9 @@ RUN mkdir /tmp/dav1d/build && cd /tmp/dav1d/build && \
 # freetype
 RUN mkdir -p /tmp/freetype && \
     curl --retry 5 --retry-all-errors --retry-delay 5 -Lf \
-    https://github.com/freetype/freetype/archive/refs/tags/${FREETYPE_TAG}.tar.gz \
+    https://download-mirror.savannah.gnu.org/releases/freetype/freetype-${FREETYPE}.tar.gz \
     -o /tmp/freetype.tar.gz && \
+    echo "${FREETYPE_SHA256}  /tmp/freetype.tar.gz" | sha256sum -c - && \
     tar -zxf /tmp/freetype.tar.gz --strip-components=1 -C /tmp/freetype && \
     rm /tmp/freetype.tar.gz
 RUN cd /tmp/freetype && \
