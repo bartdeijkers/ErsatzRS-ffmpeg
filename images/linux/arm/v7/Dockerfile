@@ -441,9 +441,11 @@ RUN if [ -z ${FFMPEG_VERSION+x} ]; then \
     fi && \
     mkdir -p /tmp/ffmpeg && \
     echo "https://ffmpeg.org/releases/ffmpeg-${FFMPEG}.tar.bz2" && \
-    curl -Lf \
-    https://ffmpeg.org/releases/ffmpeg-${FFMPEG}.tar.bz2 | \
-    tar -jx --strip-components=1 -C /tmp/ffmpeg
+    curl --retry 5 --retry-all-errors --retry-delay 5 --connect-timeout 30 -Lf \
+    https://ffmpeg.org/releases/ffmpeg-${FFMPEG}.tar.bz2 \
+    -o /tmp/ffmpeg.tar.bz2 && \
+    tar -jxf /tmp/ffmpeg.tar.bz2 --strip-components=1 -C /tmp/ffmpeg && \
+    rm /tmp/ffmpeg.tar.bz2
 RUN cd /tmp/ffmpeg && \
     ./configure \
     --disable-debug \
@@ -503,7 +505,12 @@ FROM ${BASE_IMAGE}:${BASE_IMAGE_TAG} AS runtime-base
 
 ENV MAKEFLAGS="-j4"
 
-RUN apt-get -yqq update && \
+RUN printf '%s\n' \
+    'Acquire::Retries "5";' \
+    'Acquire::http::Timeout "30";' \
+    'Acquire::https::Timeout "30";' \
+    > /etc/apt/apt.conf.d/80-retries && \
+    apt-get -yqq update && \
     DEBIAN_FRONTEND="noninteractive" apt-get install -yq --no-install-recommends ca-certificates expat libcairo2 libgomp1 libharfbuzz-bin libxml2 libxcb-shape0 libv4l-0 \
     && apt autoremove -y \
     && rm -rf /var/lib/apt/lists/*

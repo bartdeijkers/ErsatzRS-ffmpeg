@@ -43,10 +43,16 @@ ENV AOM=v3.12.0 \
     XVID=1.3.7 \
     ZIMG=3.0.5
 
-RUN apt-get -yqq update && \
+RUN printf '%s\n' \
+    'Acquire::Retries "5";' \
+    'Acquire::http::Timeout "30";' \
+    'Acquire::https::Timeout "30";' \
+    > /etc/apt/apt.conf.d/80-retries && \
+    apt-get -yqq update && \
     apt-get install -y gpg-agent wget && \
-    wget -qO - https://repositories.intel.com/gpu/intel-graphics.key | \
-    gpg --dearmor --output /usr/share/keyrings/intel-graphics.gpg && \
+    wget --tries=5 --retry-connrefused --timeout=30 --waitretry=5 -qO /tmp/intel-graphics.key https://repositories.intel.com/gpu/intel-graphics.key && \
+    gpg --dearmor --output /usr/share/keyrings/intel-graphics.gpg /tmp/intel-graphics.key && \
+    rm /tmp/intel-graphics.key && \
     echo "deb [arch=amd64 signed-by=/usr/share/keyrings/intel-graphics.gpg] https://repositories.intel.com/gpu/ubuntu noble unified" | \
     tee  /etc/apt/sources.list.d/intel.gpu.noble.list && \
     apt-get -yqq update && \
@@ -644,9 +650,11 @@ RUN if [ -z ${FFMPEG_VERSION+x} ]; then \
     fi && \
     mkdir -p /tmp/ffmpeg && \
     echo "https://ffmpeg.org/releases/ffmpeg-${FFMPEG}.tar.bz2" && \
-    curl -Lf \
-    https://ffmpeg.org/releases/ffmpeg-${FFMPEG}.tar.bz2 | \
-    tar -jx --strip-components=1 -C /tmp/ffmpeg
+    curl --retry 5 --retry-all-errors --retry-delay 5 --connect-timeout 30 -Lf \
+    https://ffmpeg.org/releases/ffmpeg-${FFMPEG}.tar.bz2 \
+    -o /tmp/ffmpeg.tar.bz2 && \
+    tar -jxf /tmp/ffmpeg.tar.bz2 --strip-components=1 -C /tmp/ffmpeg && \
+    rm /tmp/ffmpeg.tar.bz2
 
 RUN cd /tmp/ffmpeg && \
     ./configure \
@@ -755,10 +763,16 @@ ENV MAKEFLAGS="-j4" \
     NVIDIA_DRIVER_CAPABILITIES="compute,video,utility" \
     NVIDIA_VISIBLE_DEVICES="all"
 
-RUN apt-get -yqq update && \
+RUN printf '%s\n' \
+    'Acquire::Retries "5";' \
+    'Acquire::http::Timeout "30";' \
+    'Acquire::https::Timeout "30";' \
+    > /etc/apt/apt.conf.d/80-retries && \
+    apt-get -yqq update && \
     apt-get install -y gpg-agent wget && \
-    wget -qO - https://repositories.intel.com/gpu/intel-graphics.key | \
-    gpg --dearmor --output /usr/share/keyrings/intel-graphics.gpg && \
+    wget --tries=5 --retry-connrefused --timeout=30 --waitretry=5 -qO /tmp/intel-graphics.key https://repositories.intel.com/gpu/intel-graphics.key && \
+    gpg --dearmor --output /usr/share/keyrings/intel-graphics.gpg /tmp/intel-graphics.key && \
+    rm /tmp/intel-graphics.key && \
     echo "deb [arch=amd64 signed-by=/usr/share/keyrings/intel-graphics.gpg] https://repositories.intel.com/gpu/ubuntu noble unified" | \
     tee  /etc/apt/sources.list.d/intel.gpu.noble.list && \
     apt-get -yqq update && \
@@ -801,18 +815,18 @@ RUN apt-get -yqq update && \
     ocl-icd-libopencl1 \
     wget && \
     mkdir -p /tmp/intel && cd /tmp/intel && \
-    wget -q https://github.com/intel/intel-graphics-compiler/releases/download/igc-1.0.17537.20/intel-igc-core_1.0.17537.20_amd64.deb && \
-    wget -q https://github.com/intel/intel-graphics-compiler/releases/download/igc-1.0.17537.20/intel-igc-opencl_1.0.17537.20_amd64.deb && \
-    wget -q https://github.com/intel/compute-runtime/releases/download/24.35.30872.22/intel-level-zero-gpu-legacy1_1.3.30872.22_amd64.deb && \
-    wget -q https://github.com/intel/compute-runtime/releases/download/24.35.30872.22/intel-opencl-icd-legacy1_24.35.30872.22_amd64.deb && \
-    wget -q https://github.com/intel/compute-runtime/releases/download/24.35.30872.22/ww35.sum && \
+    wget --tries=5 --retry-connrefused --timeout=30 --waitretry=5 -q https://github.com/intel/intel-graphics-compiler/releases/download/igc-1.0.17537.20/intel-igc-core_1.0.17537.20_amd64.deb && \
+    wget --tries=5 --retry-connrefused --timeout=30 --waitretry=5 -q https://github.com/intel/intel-graphics-compiler/releases/download/igc-1.0.17537.20/intel-igc-opencl_1.0.17537.20_amd64.deb && \
+    wget --tries=5 --retry-connrefused --timeout=30 --waitretry=5 -q https://github.com/intel/compute-runtime/releases/download/24.35.30872.22/intel-level-zero-gpu-legacy1_1.3.30872.22_amd64.deb && \
+    wget --tries=5 --retry-connrefused --timeout=30 --waitretry=5 -q https://github.com/intel/compute-runtime/releases/download/24.35.30872.22/intel-opencl-icd-legacy1_24.35.30872.22_amd64.deb && \
+    wget --tries=5 --retry-connrefused --timeout=30 --waitretry=5 -q https://github.com/intel/compute-runtime/releases/download/24.35.30872.22/ww35.sum && \
     sha256sum --ignore-missing -c ww35.sum && \
-    wget -q https://github.com/intel/intel-graphics-compiler/releases/download/v2.12.5/intel-igc-core-2_2.12.5+19302_amd64.deb && \
-    wget -q https://github.com/intel/intel-graphics-compiler/releases/download/v2.12.5/intel-igc-opencl-2_2.12.5+19302_amd64.deb && \
-    wget -q https://github.com/intel/compute-runtime/releases/download/25.22.33944.8/intel-ocloc_25.22.33944.8-0_amd64.deb && \
-    wget -q https://github.com/intel/compute-runtime/releases/download/25.22.33944.8/intel-opencl-icd_25.22.33944.8-0_amd64.deb && \
-    wget -q https://github.com/intel/compute-runtime/releases/download/25.22.33944.8/libze-intel-gpu1_25.22.33944.8-0_amd64.deb && \
-    wget -q https://github.com/intel/compute-runtime/releases/download/25.22.33944.8/ww22.sum && \
+    wget --tries=5 --retry-connrefused --timeout=30 --waitretry=5 -q https://github.com/intel/intel-graphics-compiler/releases/download/v2.12.5/intel-igc-core-2_2.12.5+19302_amd64.deb && \
+    wget --tries=5 --retry-connrefused --timeout=30 --waitretry=5 -q https://github.com/intel/intel-graphics-compiler/releases/download/v2.12.5/intel-igc-opencl-2_2.12.5+19302_amd64.deb && \
+    wget --tries=5 --retry-connrefused --timeout=30 --waitretry=5 -q https://github.com/intel/compute-runtime/releases/download/25.22.33944.8/intel-ocloc_25.22.33944.8-0_amd64.deb && \
+    wget --tries=5 --retry-connrefused --timeout=30 --waitretry=5 -q https://github.com/intel/compute-runtime/releases/download/25.22.33944.8/intel-opencl-icd_25.22.33944.8-0_amd64.deb && \
+    wget --tries=5 --retry-connrefused --timeout=30 --waitretry=5 -q https://github.com/intel/compute-runtime/releases/download/25.22.33944.8/libze-intel-gpu1_25.22.33944.8-0_amd64.deb && \
+    wget --tries=5 --retry-connrefused --timeout=30 --waitretry=5 -q https://github.com/intel/compute-runtime/releases/download/25.22.33944.8/ww22.sum && \
     sha256sum --ignore-missing -c ww22.sum && \
     dpkg -i /tmp/intel/*.deb && \
     rm -rf /tmp/intel && \
