@@ -39,7 +39,7 @@ on:
 env:
   # Upstream FFmpeg version these packages contain (independent of the repo
   # release tag, which is the v*.*.* git tag).
-  FFMPEG_VERSION: 9.0
+  FFMPEG_VERSION: '9.0'
 
 jobs:
   linux-x64:
