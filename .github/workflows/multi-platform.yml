@@ -14,6 +14,10 @@ env:
   IMAGE_NAME: ghcr.io/bartdeijkers/ersatzrs-ffmpeg
   RELEASE_VERSION: '9.0'
 
+permissions:
+  contents: read
+  packages: write
+
 jobs:
   build:
     name: Build Docker Images
