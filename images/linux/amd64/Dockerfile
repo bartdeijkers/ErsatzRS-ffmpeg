@@ -835,5 +835,16 @@ RUN printf '%s\n' \
     rm /usr/lib/x86_64-linux-gnu/dri/iHD_drv_video.so && \
     ln -s /usr/local/lib/x86_64-linux-gnu/dri/iHD_drv_video.so /usr/lib/x86_64-linux-gnu/dri/iHD_drv_video.so
 
+RUN ffmpeg -hide_banner -filters 2>&1 | grep -Eq '(^|[[:space:]])drawvg[[:space:]]' && \
+    ffmpeg -hide_banner -filters 2>&1 | grep -Eq '(^|[[:space:]])drawtext[[:space:]]' && \
+    ffmpeg -hide_banner -buildconf 2>&1 | grep -Fq -- '--enable-cairo' && \
+    ffmpeg -hide_banner -buildconf 2>&1 | grep -Fq -- '--enable-libfontconfig' && \
+    ffmpeg -hide_banner -buildconf 2>&1 | grep -Fq -- '--enable-libfreetype' && \
+    ffmpeg -hide_banner -buildconf 2>&1 | grep -Fq -- '--enable-libharfbuzz' && \
+    ffmpeg -hide_banner -buildconf 2>&1 | grep -Fq -- '--enable-libfribidi' && \
+    ffmpeg -hide_banner -loglevel error -f lavfi -i color=c=black:s=64x64:d=0.1 \
+      -vf "drawtext=font=Sans:text='ErsatzRS':fontsize=16:x=4:y=4,format=yuv420p" \
+      -frames:v 1 -f null -
+
 CMD         ["--help"]
 ENTRYPOINT  ["ffmpeg"]

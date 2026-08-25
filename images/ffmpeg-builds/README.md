@@ -41,10 +41,13 @@ time (see below).
      `debian:bookworm-slim` (glibc 2.36, the ErsatzRS runtime baseline); if the
      BtbN toolchain ever needs a newer glibc, the release fails loudly here
      instead of at user runtime as `GLIBC_2.xx not found`. The same gate checks
-     that both tools report `FFMPEG_VERSION` and that FFmpeg exposes `drawvg`
-     with `--enable-cairo` in its build configuration.
+     that both tools report `FFMPEG_VERSION`, that FFmpeg exposes `drawvg` and
+     `drawtext`, that Cairo plus the complete Fontconfig/FreeType/HarfBuzz/FriBidi
+     shaping stack is enabled, and that file-backed reloadable text renders.
    - win-x64: `ersatzrs-ffmpeg-<version>-win-x64/ffmpeg.exe` + `ffprobe.exe`
-     (zip).
+     (zip). A separate Windows self-hosted job downloads that exact artifact and
+     runs the same filter/build-configuration and file-backed render contract
+     before a tagged release may publish.
 
 ## Why these overrides exist
 

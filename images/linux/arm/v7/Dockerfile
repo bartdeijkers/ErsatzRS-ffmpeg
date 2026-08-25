@@ -459,6 +459,7 @@ RUN cd /tmp/ffmpeg && \
     --enable-libdav1d \
     --enable-libass \
     --enable-libfreetype \
+    --enable-libfribidi \
     --enable-libharfbuzz \
     --enable-libjxl \
     --enable-libkvazaar \
@@ -520,6 +521,17 @@ COPY --from=devel-base /buildout/ /
 RUN apt-get update && \
     apt-get install -y libicu-dev tzdata fontconfig fonts-noto-core fonts-noto-cjk libgdiplus libdrm2 && \
     rm -rf /var/lib/apt/lists/*
+
+RUN ffmpeg -hide_banner -filters 2>&1 | grep -Eq '(^|[[:space:]])drawvg[[:space:]]' && \
+    ffmpeg -hide_banner -filters 2>&1 | grep -Eq '(^|[[:space:]])drawtext[[:space:]]' && \
+    ffmpeg -hide_banner -buildconf 2>&1 | grep -Fq -- '--enable-cairo' && \
+    ffmpeg -hide_banner -buildconf 2>&1 | grep -Fq -- '--enable-libfontconfig' && \
+    ffmpeg -hide_banner -buildconf 2>&1 | grep -Fq -- '--enable-libfreetype' && \
+    ffmpeg -hide_banner -buildconf 2>&1 | grep -Fq -- '--enable-libharfbuzz' && \
+    ffmpeg -hide_banner -buildconf 2>&1 | grep -Fq -- '--enable-libfribidi' && \
+    ffmpeg -hide_banner -loglevel error -f lavfi -i color=c=black:s=64x64:d=0.1 \
+      -vf "drawtext=font=Sans:text='ErsatzRS':fontsize=16:x=4:y=4,format=yuv420p" \
+      -frames:v 1 -f null -
 
 CMD         ["--help"]
 ENTRYPOINT  ["ffmpeg"]

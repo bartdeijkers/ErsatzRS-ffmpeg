@@ -22,9 +22,11 @@ name: Release
 # bundled-libc / host-loader mismatch of the earlier ldd-closure packaging. The
 # linux repackage step then smoke-tests the binaries on debian:bookworm-slim
 # (the ErsatzRS runtime baseline) to guarantee they run there. The Windows
-# self-hosted runner is no longer used for releases.
+# self-hosted Windows runner validates the uploaded win-x64 artifact before a
+# tagged release may publish; package construction still happens on Linux.
 #   linux-x64 -> [self-hosted, ersatzrs-linux-release]
 #   win-x64   -> [self-hosted, ersatzrs-linux-release]
+#   win verify -> [self-hosted, ersatzrs-windows-release]
 
 on:
   push:
@@ -141,9 +143,9 @@ jobs:
           # glibc bump in the BtbN toolchain that would otherwise only surface at
           # user runtime as `GLIBC_2.xx not found`. (bookworm-slim ships libc6 and
           # libgcc-s1, the only non-static deps; a missing one fails here loudly.)
-          # Also assert the requested upstream version and ErsatzRS's drawvg
+          # Also assert the requested upstream version and ErsatzRS graphics
           # runtime contract so a successful build cannot publish the wrong tag
-          # or silently omit cairo support.
+          # or silently omit drawvg, drawtext, or text shaping support.
           for tool in ffmpeg ffprobe; do
             version_output="$(docker run --rm -v "$OUTDIR/$dest:/pkg:ro" \
               debian:bookworm-slim "/pkg/$tool" -version)"
@@ -154,9 +156,20 @@ jobs:
           filters="$(docker run --rm -v "$OUTDIR/$dest:/pkg:ro" \
             debian:bookworm-slim /pkg/ffmpeg -hide_banner -filters)"
           grep -Eq '(^|[[:space:]])drawvg[[:space:]]' <<< "$filters"
+          grep -Eq '(^|[[:space:]])drawtext[[:space:]]' <<< "$filters"
           buildconf="$(docker run --rm -v "$OUTDIR/$dest:/pkg:ro" \
             debian:bookworm-slim /pkg/ffmpeg -hide_banner -buildconf)"
-          grep -Fq -- '--enable-cairo' <<< "$buildconf"
+          for flag in --enable-cairo --enable-fontconfig --enable-libfreetype --enable-libharfbuzz --enable-libfribidi; do
+            grep -Fq -- "$flag" <<< "$buildconf"
+          done
+          printf '%s' 'ErsatzRS' > "$OUTDIR/$dest/drawtext-proof.txt"
+          docker run --rm -v "$OUTDIR/$dest:/pkg:ro" debian:bookworm-slim \
+            sh -ec "apt-get update -qq && apt-get install -yqq --no-install-recommends fonts-dejavu-core >/dev/null && \
+              /pkg/ffmpeg -hide_banner -loglevel error \
+              -f lavfi -i color=c=black:s=64x64:d=0.1 \
+              -vf 'drawtext=fontfile=/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf:textfile=/pkg/drawtext-proof.txt:reload=1:fontsize=16:x=4:y=4,format=yuv420p' \
+              -frames:v 1 -f null -"
+          rm "$OUTDIR/$dest/drawtext-proof.txt"
           pkg="${dest}.tar.gz"
           tar -C "$OUTDIR" -czf "$OUTDIR/$pkg" "$dest"
           ( cd "$OUTDIR" && sha256sum "$pkg" > "$pkg.sha256" )
@@ -252,11 +265,76 @@ jobs:
           path: ${{ runner.temp }}/ersatzrs-ffmpeg-*-win-x64.zip*
           if-no-files-found: error
 
+  win-x64-verify:
+    name: Verify win-x64 graphics contract
+    if: ${{ github.event_name != 'workflow_dispatch' || github.event.inputs.target == 'all' || github.event.inputs.target == 'win-x64' }}
+    needs: win-x64
+    runs-on: [self-hosted, ersatzrs-windows-release]
+    permissions:
+      actions: read
+      contents: read
+    steps:
+      - name: Download win-x64 artifact
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $destination = Join-Path $env:RUNNER_TEMP 'win-x64-artifact'
+          $downloaded = $false
+          foreach ($attempt in 1..5) {
+            Remove-Item -Recurse -Force -ErrorAction SilentlyContinue $destination
+            New-Item -ItemType Directory -Force -Path $destination | Out-Null
+            gh run download $env:GITHUB_RUN_ID --repo $env:GITHUB_REPOSITORY --name win-x64 --dir $destination
+            if ($LASTEXITCODE -eq 0) {
+              $downloaded = $true
+              break
+            }
+            Start-Sleep -Seconds ($attempt * 10)
+          }
+          if (-not $downloaded) { throw 'win-x64 artifact download failed after 5 attempts' }
+          $archive = Get-ChildItem -Path $destination -Filter '*.zip' -Recurse | Select-Object -First 1
+          if ($null -eq $archive) { throw 'win-x64 package archive is missing' }
+          $expanded = Join-Path $destination 'expanded'
+          Expand-Archive -LiteralPath $archive.FullName -DestinationPath $expanded
+          "package_root=$expanded" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+
+      - name: Execute drawtext package proof
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $ffmpeg = Get-ChildItem -Path $env:package_root -Filter 'ffmpeg.exe' -Recurse | Select-Object -First 1
+          $ffprobe = Get-ChildItem -Path $env:package_root -Filter 'ffprobe.exe' -Recurse | Select-Object -First 1
+          if ($null -eq $ffmpeg -or $null -eq $ffprobe) { throw 'packaged FFmpeg tools are missing' }
+          & $ffmpeg.FullName -version | Select-Object -First 1
+          if ($LASTEXITCODE -ne 0) { throw 'ffmpeg -version failed' }
+          & $ffprobe.FullName -version | Select-Object -First 1
+          if ($LASTEXITCODE -ne 0) { throw 'ffprobe -version failed' }
+          $filters = (& $ffmpeg.FullName -hide_banner -filters 2>&1) -join "`n"
+          foreach ($filter in 'drawvg', 'drawtext') {
+            if ($filters -notmatch "(?m)^.*\s$filter\s") { throw "missing required filter $filter" }
+          }
+          $buildconf = (& $ffmpeg.FullName -hide_banner -buildconf 2>&1) -join "`n"
+          foreach ($flag in '--enable-cairo', '--enable-fontconfig', '--enable-libfreetype', '--enable-libharfbuzz', '--enable-libfribidi') {
+            if (-not $buildconf.Contains($flag)) { throw "missing required build flag $flag" }
+          }
+          $proof = Join-Path $env:RUNNER_TEMP 'drawtext proof'
+          New-Item -ItemType Directory -Force -Path $proof | Out-Null
+          Set-Content -LiteralPath (Join-Path $proof 'text.txt') -Value 'ErsatzRS' -NoNewline -Encoding utf8
+          Copy-Item -LiteralPath (Join-Path $env:WINDIR 'Fonts\arial.ttf') -Destination (Join-Path $proof 'font.ttf')
+          Push-Location $proof
+          try {
+            & $ffmpeg.FullName -hide_banner -loglevel error -f lavfi -i 'color=c=black:s=64x64:d=0.1' -vf "drawtext=fontfile='font.ttf':textfile='text.txt':reload=1:fontsize=16:x=4:y=4,format=yuv420p" -frames:v 1 -f null -
+            if ($LASTEXITCODE -ne 0) { throw 'file-backed drawtext render failed' }
+          } finally {
+            Pop-Location
+          }
+
   release:
     name: Publish release
     # Only publish for an actual tag push; workflow_dispatch is build-only.
     if: ${{ github.event_name == 'push' }}
-    needs: [linux-x64, win-x64]
+    needs: [linux-x64, win-x64, win-x64-verify]
     runs-on: [self-hosted, ersatzrs-linux-release]
     permissions:
       contents: write
@@ -298,5 +376,5 @@ jobs:
             gh release create "$TAG" "${files[@]}" \
               --repo "$GITHUB_REPOSITORY" \
               --title "$TAG" \
-              --notes "FFmpeg ${FFMPEG_VERSION} for ErsatzRS (drawvg/cairo, libsvtav1, libjxl, zimg). RIDs: linux-x64, win-x64."
+              --notes "FFmpeg ${FFMPEG_VERSION} for ErsatzRS (drawvg/cairo, drawtext with shaping, libsvtav1, libjxl, zimg). RIDs: linux-x64, win-x64."
           fi
