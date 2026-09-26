@@ -1,0 +1,55 @@
+--- a/libavutil/hwcontext_vulkan.c
++++ b/libavutil/hwcontext_vulkan.c
+@@ -2803,33 +2803,43 @@
+     VkPhysicalDeviceImageFormatInfo2 pinfo = {
+         .sType  = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_IMAGE_FORMAT_INFO_2,
+         .pNext  = !exp ? NULL : &enext,
+-        .format = hwctx->format[0],
+         .type   = VK_IMAGE_TYPE_2D,
+         .tiling = hwctx->tiling,
+         .usage  = hwctx->usage,
+-        .flags  = (hwctx->tiling == VK_IMAGE_TILING_DRM_FORMAT_MODIFIER_EXT && has_mods) ?
+-                  (hwctx->img_flags) : (VkImageCreateFlags)(VK_IMAGE_CREATE_ALIAS_BIT),
++        .flags  = hwctx->img_flags,
+     };
+ 
+     nb_mods = has_mods ? drm_mod_info->drmFormatModifierCount : 1;
+     for (int i = 0; i < nb_mods; i++) {
++        VkExternalMemoryHandleTypeFlags comp = 0;
++        int dedicated = 0;
++        int j;
++
+         if (has_mods)
+             phy_dev_mod_info.drmFormatModifier = drm_mod_info->pDrmFormatModifiers[i];
+ 
+-        ret = vk->GetPhysicalDeviceImageFormatProperties2(dev_hwctx->phys_dev,
+-                                                        &pinfo, &props);
++        /* Every image backing a frame must support external-memory export. */
++        for (j = 0; hwctx->format[j] != VK_FORMAT_UNDEFINED; j++) {
++            pinfo.format = hwctx->format[j];
++            ret = vk->GetPhysicalDeviceImageFormatProperties2(dev_hwctx->phys_dev,
++                                                             &pinfo, &props);
++            if (ret != VK_SUCCESS)
++                break;
++            comp |= eprops.externalMemoryProperties.compatibleHandleTypes;
++            dedicated |= !!(eprops.externalMemoryProperties.externalMemoryFeatures &
++                            VK_EXTERNAL_MEMORY_FEATURE_DEDICATED_ONLY_BIT);
++        }
+ 
+         if (has_mods)
+             av_log(hwfc, AV_LOG_VERBOSE, "GetPhysicalDeviceImageFormatProperties2: mod[%d]=0x%llx -> %s\n",
+                    i, (unsigned long long)phy_dev_mod_info.drmFormatModifier,
+                    ret == VK_SUCCESS ? "OK" : "FAIL");
+-        if (ret == VK_SUCCESS) {
++        if (hwctx->format[j] == VK_FORMAT_UNDEFINED) {
+             *iexp |= exp;
+-            *comp_handle_types |= eprops.externalMemoryProperties.compatibleHandleTypes;
++            *comp_handle_types |= comp;
+             if (exp == VK_EXTERNAL_MEMORY_HANDLE_TYPE_DMA_BUF_BIT_EXT) {
+                 VulkanFramesPriv *fp = hwfc->hwctx;
+-                fp->export_requires_dedicated = !!(eprops.externalMemoryProperties.externalMemoryFeatures &
+-                                                  VK_EXTERNAL_MEMORY_FEATURE_DEDICATED_ONLY_BIT);
++                fp->export_requires_dedicated = dedicated;
+             }
+         }
+     }

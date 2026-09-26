@@ -229,6 +229,7 @@ jobs:
             || sed -i 's/^\( *\)echo rpath$/\1echo cairo\n\1echo rpath/' "$WORK/scripts.d/zz-final.sh"
           grep -q 'echo cairo' "$WORK/scripts.d/zz-final.sh"  # fail loudly if the anchor moved
           cd "$WORK"
+          python3 "$GITHUB_WORKSPACE/images/ffmpeg-builds/prepare-windows-patches.py" "$WORK"
           ./makeimage.sh win64 gpl 9.0
           GIT_BRANCH_OVERRIDE="$FFTAG" ./build.sh win64 gpl 9.0
 
@@ -306,10 +307,12 @@ jobs:
           $ffmpeg = Get-ChildItem -Path $env:package_root -Filter 'ffmpeg.exe' -Recurse | Select-Object -First 1
           $ffprobe = Get-ChildItem -Path $env:package_root -Filter 'ffprobe.exe' -Recurse | Select-Object -First 1
           if ($null -eq $ffmpeg -or $null -eq $ffprobe) { throw 'packaged FFmpeg tools are missing' }
-          & $ffmpeg.FullName -version | Select-Object -First 1
+          $ffmpegVersion = & $ffmpeg.FullName -version
           if ($LASTEXITCODE -ne 0) { throw 'ffmpeg -version failed' }
-          & $ffprobe.FullName -version | Select-Object -First 1
+          $ffmpegVersion | Select-Object -First 1
+          $ffprobeVersion = & $ffprobe.FullName -version
           if ($LASTEXITCODE -ne 0) { throw 'ffprobe -version failed' }
+          $ffprobeVersion | Select-Object -First 1
           $filters = (& $ffmpeg.FullName -hide_banner -filters 2>&1) -join "`n"
           foreach ($filter in 'drawvg', 'drawtext') {
             if ($filters -notmatch "(?m)^.*\s$filter\s") { throw "missing required filter $filter" }

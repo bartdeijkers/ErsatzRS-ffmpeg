@@ -64,3 +64,32 @@ are written to work for both `win*` and `linux*` targets:
 
 Pinned versions are bumped here when upstream FFmpeg-Builds or these libraries
 are updated.
+
+## Windows Vulkan/CUDA export patch
+
+The Windows package applies `patches/0001-vulkan-cuda-export.patch` after
+cloning FFmpeg and before configure. `prepare-windows-patches.py` adds a
+read-only patch mount to the pinned BtbN build; unexpected script structure
+or a patch that does not apply fails the build.
+
+This adapts ErsatzTV-ffmpeg's `patches/0002-vulkan-cuda-export-fix.patch`
+for FFmpeg n9.0. Export queries use the actual image creation flags and check
+every backing image format. FFmpeg 9's DRM modifier logging and dedicated
+allocation requirements are retained; a dedicated requirement from any image
+is preserved. The patch is needed even though n9.0 is newer than the upstream
+8.1.2 package. Native Windows CUDA control, Vulkan/libplacebo/CUDA/NVENC
+execution and decoded output must pass before publishing a replacement.
+
+Run the manual native gate on a Windows NVIDIA machine against the extracted
+first-party package:
+
+```powershell
+pwsh -File scripts/verify-windows-vulkan-cuda.ps1 -Bundle <extracted-package-directory>
+```
+
+It records executable identity, checks the CUDA control and the existing
+ErsatzRS capability graph, then encodes and decodes 25 synthetic HDR-tagged
+frames through Vulkan/libplacebo/CUDA/NVENC. The output must be H.264 at
+256x144 with BT.709 color metadata and exactly 25 decoded frames. Every
+process has a 30-second bound; failures fail the gate. This proves interop
+and output decoding, not subjective HDR tone-mapping quality.
