@@ -68,7 +68,7 @@ are updated.
 ## Windows Vulkan/CUDA export patch
 
 The Windows package applies `patches/0001-vulkan-cuda-export.patch` after
-cloning FFmpeg and before configure. `prepare-windows-patches.py` adds a
+cloning FFmpeg and before configure. `prepare-patches.py` adds a
 read-only patch mount to the pinned BtbN build; unexpected script structure
 or a patch that does not apply fails the build.
 
@@ -93,3 +93,43 @@ frames through Vulkan/libplacebo/CUDA/NVENC. The output must be H.264 at
 256x144 with BT.709 color metadata and exactly 25 decoded frames. Every
 process has a 30-second bound; failures fail the gate. This proves interop
 and output decoding, not subjective HDR tone-mapping quality.
+
+## Sparse-stream readrate patch
+
+All release packages and Linux container architectures apply
+`patches/common/0002-sparse-readrate.patch` before configure. This is
+ErsatzTV-ffmpeg commit `32bf88a39655c34767abcdde59526fa3973c90a9`, adapted
+without semantic changes to FFmpeg n9.0 (three-line offsets only). Audio/video
+streams set the readrate pace; subtitles and other sparse streams are fallback
+clocks only when no active audio/video remains. The earlier slowest-stream fix
+is already in n9.0 and is insufficient by itself.
+
+`prepare-patches.py BUILD_TREE linux64` installs common patches; `win64` also
+installs the Vulkan/CUDA patch. Container builds apply the same common files
+with zero fuzz. Unexpected source or recipe structure fails the build.
+
+Run the deterministic source regression against the patched build tree:
+
+```sh
+python3 scripts/verify-readrate-source.py <ffmpeg-source>/fftools/ffmpeg_demux.c
+```
+
+It compiles the actual `readrate_sleep` function with a controlled clock and
+checks audio/video pacing beside frozen subtitles, the slowest continuous
+stream, sparse-only fallback, and finished/discarded/unstarted exclusions.
+Unpatched n9.0 fails the two continuous-stream cases. This source check does
+not replace decoded playback and package verification.
+
+Run the decoded pacing regression on a Linux host (Windows packages use WSL
+interop and `wslpath`):
+
+```sh
+python3 scripts/verify-sparse-playback.py <package>/ffmpeg
+python3 scripts/verify-sparse-playback.py <package>/ffmpeg.exe
+```
+
+The temporary fixture has 16 seconds of video, two audio tracks, and PGS
+packets at 0/2/10/14 seconds. It requires progress gaps below two seconds and
+media lead below one second, all 400 decoded frames, both bitmap positions,
+the selected 880 Hz alternate audio and error-free decoding. Each subprocess
+has a deadline. No user library is read or changed.

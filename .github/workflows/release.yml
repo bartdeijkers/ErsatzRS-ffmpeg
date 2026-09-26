@@ -107,6 +107,7 @@ jobs:
             || sed -i 's/^\( *\)echo rpath$/\1echo cairo\n\1echo rpath/' "$WORK/scripts.d/zz-final.sh"
           grep -q 'echo cairo' "$WORK/scripts.d/zz-final.sh"  # fail loudly if the anchor moved
           cd "$WORK"
+          python3 "$GITHUB_WORKSPACE/images/ffmpeg-builds/prepare-patches.py" "$WORK" linux64
           ./makeimage.sh linux64 gpl 9.0
           GIT_BRANCH_OVERRIDE="$FFTAG" ./build.sh linux64 gpl 9.0
 
@@ -229,7 +230,7 @@ jobs:
             || sed -i 's/^\( *\)echo rpath$/\1echo cairo\n\1echo rpath/' "$WORK/scripts.d/zz-final.sh"
           grep -q 'echo cairo' "$WORK/scripts.d/zz-final.sh"  # fail loudly if the anchor moved
           cd "$WORK"
-          python3 "$GITHUB_WORKSPACE/images/ffmpeg-builds/prepare-windows-patches.py" "$WORK"
+          python3 "$GITHUB_WORKSPACE/images/ffmpeg-builds/prepare-patches.py" "$WORK" win64
           ./makeimage.sh win64 gpl 9.0
           GIT_BRANCH_OVERRIDE="$FFTAG" ./build.sh win64 gpl 9.0
 

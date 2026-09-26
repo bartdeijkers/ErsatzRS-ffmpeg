@@ -656,6 +656,10 @@ RUN if [ -z ${FFMPEG_VERSION+x} ]; then \
     tar -jxf /tmp/ffmpeg.tar.bz2 --strip-components=1 -C /tmp/ffmpeg && \
     rm /tmp/ffmpeg.tar.bz2
 
+COPY images/ffmpeg-builds/patches/common/ /tmp/ersatzrs-patches/
+RUN cd /tmp/ffmpeg && for patch in /tmp/ersatzrs-patches/*.patch; do \
+    patch --batch --fuzz=0 -p1 < "$patch" || exit 1; done
+
 RUN cd /tmp/ffmpeg && \
     ./configure \
     --ld=clang++ \
