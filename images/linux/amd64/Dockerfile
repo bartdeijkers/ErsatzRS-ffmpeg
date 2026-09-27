@@ -23,7 +23,7 @@ ENV AOM=v3.12.0 \
     LIBDRM=2.4.124 \
     LIBGL=1.7.0 \
     LIBJXL=0.11.2 \
-    LIBPLACEBO=7.349.0 \
+    LIBPLACEBO=7.351.0 \
     LIBSRT=1.5.4 \
     LIBVA=2.22.0 \
     LIBVDPAU=1.5 \
@@ -310,18 +310,6 @@ RUN cd /tmp/libdovi/dolby_vision && \
     cargo cinstall --release && \
     strip -d /usr/local/lib64/libdovi.so
 
-# libplacebo
-RUN mkdir -p /tmp/libplacebo && \
-    git clone \
-    --branch v${LIBPLACEBO} \
-    --recursive https://code.videolan.org/videolan/libplacebo \
-    /tmp/libplacebo
-RUN cd /tmp/libplacebo && \
-    meson setup \
-    --prefix=/usr --libdir=/usr/local/lib/x86_64-linux-gnu \
-    . build --buildtype release && \
-    ninja -C build install
-
 # libsrt
 RUN mkdir -p /tmp/libsrt && \
     curl -Lf \
@@ -406,6 +394,19 @@ RUN cd /tmp/shaderc && \
     -DCMAKE_INSTALL_PREFIX=/usr/local \
     .. && \
     ninja install
+
+# libplacebo needs shaderc installed before Meson detects its GLSL compiler.
+# libplacebo
+RUN mkdir -p /tmp/libplacebo && \
+    git clone \
+    --branch v${LIBPLACEBO} \
+    --recursive https://code.videolan.org/videolan/libplacebo \
+    /tmp/libplacebo
+RUN cd /tmp/libplacebo && \
+    meson setup \
+    --prefix=/usr --libdir=/usr/local/lib/x86_64-linux-gnu \
+    . build --buildtype release -Dshaderc=enabled && \
+    ninja -C build install
 
 # libwebp
 RUN mkdir -p /tmp/libwebp && \
@@ -660,9 +661,11 @@ COPY images/ffmpeg-builds/patches/common/ /tmp/ersatzrs-patches/
 RUN cd /tmp/ffmpeg && for patch in /tmp/ersatzrs-patches/*.patch; do \
     patch --batch --fuzz=0 -p1 < "$patch" || exit 1; done
 
+# FFmpeg 9 compiles Vulkan shaders with glslc instead of linking libshaderc.
 RUN cd /tmp/ffmpeg && \
     ./configure \
     --ld=clang++ \
+    --glslc=/usr/local/bin/glslc \
     --disable-debug \
     --disable-doc \
     --disable-ffplay \
@@ -688,7 +691,6 @@ RUN cd /tmp/ffmpeg && \
     --enable-libopenjpeg \
     --enable-libopus \
     --enable-libplacebo \
-    --enable-libshaderc \
     --enable-libsrt \
     --enable-libsvtav1 \
     --enable-libtheora \
@@ -840,6 +842,8 @@ RUN printf '%s\n' \
     ln -s /usr/local/lib/x86_64-linux-gnu/dri/iHD_drv_video.so /usr/lib/x86_64-linux-gnu/dri/iHD_drv_video.so
 
 RUN ffmpeg -hide_banner -filters 2>&1 | grep -Eq '(^|[[:space:]])drawvg[[:space:]]' && \
+    ffmpeg -hide_banner -filters 2>&1 | grep -Eq '(^|[[:space:]])scale_vulkan[[:space:]]' && \
+    ffmpeg -hide_banner -filters 2>&1 | grep -Eq '(^|[[:space:]])libplacebo[[:space:]]' && \
     ffmpeg -hide_banner -filters 2>&1 | grep -Eq '(^|[[:space:]])drawtext[[:space:]]' && \
     ffmpeg -hide_banner -buildconf 2>&1 | grep -Fq -- '--enable-cairo' && \
     ffmpeg -hide_banner -buildconf 2>&1 | grep -Fq -- '--enable-libfontconfig' && \
