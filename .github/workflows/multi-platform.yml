@@ -2,6 +2,12 @@ name: Docker Publish Multi-Platform
 
 on:
   workflow_dispatch:
+    inputs:
+      image_digest:
+        description: 'Existing tested multi-platform sha256 digest to publish without rebuilding (blank runs a full build)'
+        required: false
+        type: string
+        default: ''
   push:
     branches:
       - main
@@ -19,6 +25,44 @@ permissions:
   packages: write
 
 jobs:
+  publish-existing:
+    name: Publish existing Docker image
+    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && inputs.image_digest != ''
+    runs-on: [self-hosted, ersatzrs-linux-release]
+    env:
+      IMAGE_DIGEST: ${{ inputs.image_digest }}
+    steps:
+      - name: Validate digest
+        shell: bash
+        run: |
+          [[ "$IMAGE_DIGEST" =~ ^sha256:[0-9a-f]{64}$ ]] || {
+            echo 'Expected a complete sha256 image digest' >&2
+            exit 1
+          }
+
+      - name: Login to container registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Publish and verify existing manifest
+        shell: bash
+        run: |
+          work_dir="$(mktemp -d)"
+          trap 'rm -rf "$work_dir"' EXIT
+          source_ref="$IMAGE_NAME@$IMAGE_DIGEST"
+          target_ref="$IMAGE_NAME:$RELEASE_VERSION"
+          docker buildx imagetools inspect "$source_ref" --raw > "$work_dir/source.json"
+          docker buildx imagetools create --tag "$target_ref" "$source_ref"
+          docker buildx imagetools inspect "$target_ref" --raw > "$work_dir/published.json"
+          cmp "$work_dir/source.json" "$work_dir/published.json"
+          docker buildx imagetools inspect "$target_ref"
+
   build:
     name: Build Docker Images
     # Use the same self-hosted runners as ErsatzRS. All three FFmpeg images are
@@ -26,7 +70,7 @@ jobs:
     # runner; arm64/arm-v7 are produced via QEMU emulation (see the QEMU setup
     # step below), mirroring how ErsatzRS cross-builds those RIDs.
     runs-on: ${{ fromJSON(matrix.runner) }}
-    if: contains(github.event.head_commit.message, '[no build]') == false
+    if: inputs.image_digest == '' && contains(github.event.head_commit.message, '[no build]') == false
     strategy:
       fail-fast: false
       matrix:
@@ -131,7 +175,7 @@ jobs:
         with:
           images: ${{ env.IMAGE_NAME }}
           tags: |
-            type=semver,pattern={{version}},value=${{ env.RELEASE_VERSION }}
+            type=raw,value=${{ env.RELEASE_VERSION }}
             type=raw,value=latest
 
       - name: Create manifest list and push
