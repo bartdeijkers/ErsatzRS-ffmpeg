@@ -1,0 +1,24 @@
+diff --git a/libavfilter/video.c b/libavfilter/video.c
+index 9be2f65..7971fff 100644
+--- a/libavfilter/video.c
++++ b/libavfilter/video.c
+@@ -60,9 +60,17 @@ AVFrame *ff_default_get_video_buffer2(AVFilterLink *link, int w, int h, int alig
+             return NULL;
+ 
+         ret = av_hwframe_get_buffer(li->l.hw_frames_ctx, frame, 0);
+-        if (ret < 0)
++        if (ret < 0) {
+             av_frame_free(&frame);
+-
++            return NULL;
++        }
++
++        /* The hardware surface can include padded rows beyond the requested
++         * visible image. Preserve the allocation, but report its logical size. */
++        if (frame->width >= w && frame->height >= h) {
++            frame->width = w;
++            frame->height = h;
++        }
+         return frame;
+     }
+ 

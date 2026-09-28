@@ -31,7 +31,8 @@ time (see below).
    present but never reached and `--enable-cairo` silently drops out (pixman is
    pulled in as cairo's dependency). The workflow fails loudly if the `sed`
    anchor moves on a pin bump,
-3. run `./makeimage.sh <target> gpl 9.0` then
+3. run `./makeimage.sh <target> gpl 9.0`, extend that image with the SVG
+   dependency layer below, then use its exact image ID for
    `GIT_BRANCH_OVERRIDE=n<FFMPEG_VERSION> ./build.sh <target> gpl 9.0`
    (`<target>` is `linux64` / `win64`; the `9.0` addin sets the version gating;
    `GIT_BRANCH_OVERRIDE` pins the exact FFmpeg release tag),
@@ -65,9 +66,9 @@ are written to work for both `win*` and `linux*` targets:
 Pinned versions are bumped here when upstream FFmpeg-Builds or these libraries
 are updated.
 
-## Windows Vulkan/CUDA export patch
+## Vulkan/CUDA export patch
 
-The Windows package applies `patches/0001-vulkan-cuda-export.patch` after
+Both packages apply `patches/common/0001-vulkan-cuda-export.patch` after
 cloning FFmpeg and before configure. `prepare-patches.py` adds a
 read-only patch mount to the pinned BtbN build; unexpected script structure
 or a patch that does not apply fails the build.
@@ -76,7 +77,10 @@ This adapts ErsatzTV-ffmpeg's `patches/0002-vulkan-cuda-export-fix.patch`
 for FFmpeg n9.0. Export queries use the actual image creation flags and check
 every backing image format. FFmpeg 9's DRM modifier logging and dedicated
 allocation requirements are retained; a dedicated requirement from any image
-is preserved. The patch is needed even though n9.0 is newer than the upstream
+is preserved. The image-flags query is shared across platforms; applying the
+correction only on Windows left Linux dependent on driver tolerance. Native
+Linux NVIDIA export remains unverified on the WSL build machine; software
+Vulkan checks do not replace that hardware gate. The patch is needed even though n9.0 is newer than the upstream
 8.1.2 package. Native Windows CUDA control, Vulkan/libplacebo/CUDA/NVENC
 execution and decoded output must pass before publishing a replacement.
 
@@ -105,7 +109,7 @@ clocks only when no active audio/video remains. The earlier slowest-stream fix
 is already in n9.0 and is insufficient by itself.
 
 `prepare-patches.py BUILD_TREE linux64` installs common patches; `win64` also
-installs the Vulkan/CUDA patch. Container builds apply the same common files
+installs the Windows D3D11 patches. Container builds apply the same common files
 with zero fuzz. Unexpected source or recipe structure fails the build.
 
 Run the deterministic source regression against the patched build tree:
@@ -133,3 +137,81 @@ packets at 0/2/10/14 seconds. It requires progress gaps below two seconds and
 media lead below one second, all 400 decoded frames, both bitmap positions,
 the selected 880 Hz alternate audio and error-free decoding. Each subprocess
 has a deadline. No user library is read or changed.
+
+## Expanded FFmpeg 9 patch set
+
+The additional patches are rebased from ErsatzTV-ffmpeg `8.1.2-1`, tree
+`5bdca62b3d8b129d7ddec66647e8a36c7d680678`:
+
+| Local patch | Upstream patch | Purpose |
+| --- | --- | --- |
+| common/0003 | 0001 | Requested hardware-frame dimensions; n9.0 already handles software frames |
+| common/0004 | 0008 | Seed QSV composition output timestamps |
+| common/0005 | 0009 | QSV padding through a single-input composite |
+| common/0006 | 0010 | Padding colour/range, chroma alignment and incompatible-operation guards |
+| common/0007 | 0011 | AMF MPEG-2 and VC-1 decoder wrappers |
+| windows/0008 | 0003 | D3D11 render-target texture allocation |
+| windows/0009 | 0004 | Clamp only array-texture pools |
+| common/0010 | Local FFmpeg 9 correction | Mark librsvg Cairo output as premultiplied alpha |
+
+Upstream's slowest-stream readrate correction already exists in n9.0; the
+sparse-stream correction remains necessary. The pinned libva API already
+passes the alignment-query version guard. The pinned OpenAPV API predates the
+1.1 change, so its compatibility patch is not applied. These decisions must be
+reviewed if those dependencies are bumped.
+
+Decoder/filter availability is not hardware acceptance. This candidate is
+built on a machine with NVIDIA hardware: Intel QSV and AMD AMF playback remain
+unverified. Registering `vc1_amf` must not cause ErsatzRS/Next to select it for
+MKV playback while upstream's timestamp restriction remains. The D3D11 texture
+change also retains upstream's tradeoff for consumers expecting texture arrays.
+
+## SVG dependency layer
+
+`svg/Dockerfile` extends a previously built BtbN dependency image. It builds
+static Libffi, PCRE2, GLib, Cairo, Pango and librsvg, rebuilds the same pinned
+rav1e using its `release-no-lto` profile to avoid Rust runtime symbol collisions,
+and enables `--enable-librsvg`.
+Recipes derive from ErsatzTV/FFmpeg-Builds commit
+`80c8a385fe18296798fae24133cde6a5595a40e9`; Cairo stays at 1.18.4, and Libffi uses
+the checksum-verified 3.5.2 release archive because its newer git bootstrap
+requires an Autotools macro absent from the pinned toolchain. Rust dependencies
+are vendored using librsvg's committed Cargo.lock before the offline build.
+Resolved source revisions and available licence files are retained in
+`/opt/ersatzrs-svg-sources` inside the toolchain image.
+
+To reuse a local dependency cache, give it a separate local tag, then build this
+layer directly with host Docker. Do not mount the Docker socket. Select the
+resulting image explicitly for the prepared BtbN build:
+
+```sh
+docker build --build-arg BASE_IMAGE=<local-base-tag> \
+  --build-arg FFBUILD_JOBS=8 -t ersatzrs-ffmpeg-svg:<target> \
+  images/ffmpeg-builds/svg
+python3 images/ffmpeg-builds/prepare-patches.py <fresh-build-tree> <target>
+# Run in the prepared BtbN tree; target is linux64 or win64.
+FFBUILD_IMAGE_OVERRIDE=ersatzrs-ffmpeg-svg:<target> \
+  GIT_BRANCH_OVERRIDE=n9.0 ./build.sh <target> gpl 9.0
+```
+
+Record exact image IDs, source revisions, patch hashes and resulting package
+checksums with the candidate. A mutable image tag does not identify a released
+package. This layer builds downloadable packages; it does not republish the
+existing multi-platform Docker runtime.
+
+FFmpeg 9's librsvg decoder omitted alpha-mode metadata. The local 0010 patch
+sets the existing `AVCodecContext` field to premultiplied alpha, matching Cairo's
+pixel storage. Without it, automatic overlay of 50% blue on white decodes as
+127/127/191 instead of 127/127/255. The regression checks the default overlay
+path without an explicit alpha-mode override.
+
+Verify decoded SVG dimensions, scaling, colour, transparency, automatic overlay
+and visible text:
+
+```sh
+python3 scripts/verify-svg.py <package>/ffmpeg
+python3 scripts/verify-svg.py <package>/ffmpeg.exe
+```
+
+Retain the existing drawvg/drawtext, sparse-subtitle playback, Linux baseline
+and native Windows Vulkan/CUDA checks. SVG support does not replace those gates.

@@ -1,0 +1,19 @@
+diff --git a/libavfilter/qsvvpp.c b/libavfilter/qsvvpp.c
+index c3685f1..60195ee 100644
+--- a/libavfilter/qsvvpp.c
++++ b/libavfilter/qsvvpp.c
+@@ -1000,6 +1000,14 @@ int ff_qsvvpp_filter_frame(QSVVPPContext *s, AVFilterLink *inlink, AVFrame *picr
+         if (ret)
+             return ret;
+ 
++        /* Seed the output timestamp from the input. Most VPP operations have
++         * MFX write the output surface's TimeStamp itself, in which case this
++         * is overwritten and costs nothing; but composition (mfxExtVPPComposite)
++         * leaves it untouched, and the stale value then clobbers the correct pts
++         * that query_frame() copied from propref -- which makes the frame rate
++         * converter drop nearly every frame as non-advancing. */
++        out_frame->surface.Data.TimeStamp = in_frame->surface.Data.TimeStamp;
++
+         do {
+             ret = MFXVideoVPP_RunFrameVPPAsync(s->session, &in_frame->surface,
+                                                &out_frame->surface, NULL, &sync);

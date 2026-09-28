@@ -109,7 +109,15 @@ jobs:
           cd "$WORK"
           python3 "$GITHUB_WORKSPACE/images/ffmpeg-builds/prepare-patches.py" "$WORK" linux64
           ./makeimage.sh linux64 gpl 9.0
-          GIT_BRANCH_OVERRIDE="$FFTAG" ./build.sh linux64 gpl 9.0
+          svg_image="ersatzrs-ffmpeg-svg:linux64-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          base_image="ghcr.io/${GITHUB_REPOSITORY,,}/linux64-gpl-9.0:latest"
+          docker build --build-arg BASE_IMAGE="$base_image" --build-arg FFBUILD_JOBS=8 \
+            -t "$svg_image" "$GITHUB_WORKSPACE/images/ffmpeg-builds/svg"
+          image_id="$(docker image inspect --format '{{.Id}}' "$svg_image")"
+          printf '%s\n' "$image_id" > "$WORK/svg-image-id.txt"
+          docker run --rm --network none --entrypoint tar "$image_id" \
+            -C /opt -cf - ersatzrs-svg-sources > "$WORK/svg-sources.tar"
+          FFBUILD_IMAGE_OVERRIDE="$image_id" GIT_BRANCH_OVERRIDE="$FFTAG" ./build.sh linux64 gpl 9.0
 
       - name: Repackage to ErsatzRS layout
         # BtbN emits <build-name>/bin/{ffmpeg,ffprobe} inside a .tar.xz; ErsatzRS
@@ -129,6 +137,11 @@ jobs:
           tar -C "$tmp" -xf "$src_archive"
           dest="ersatzrs-ffmpeg-${VERSION}-linux-x64"
           rm -rf "${OUTDIR:?}/$dest" && mkdir -p "$OUTDIR/$dest"
+          mkdir -p "$OUTDIR/$dest/build-info"
+          tar -xf "$WORK/svg-sources.tar" -C "$OUTDIR/$dest/build-info"
+          cp "$WORK/svg-image-id.txt" "$OUTDIR/$dest/build-info/"
+          ( cd "$WORK/ersatzrs-patches" && sha256sum *.patch ) \
+            > "$OUTDIR/$dest/build-info/patches.sha256"
           find "$tmp" -type f -name ffmpeg  -exec cp {} "$OUTDIR/$dest/" \;
           find "$tmp" -type f -name ffprobe -exec cp {} "$OUTDIR/$dest/" \;
           find "$tmp" -iname 'LICENSE*'     -exec cp {} "$OUTDIR/$dest/" \;
@@ -160,7 +173,7 @@ jobs:
           grep -Eq '(^|[[:space:]])drawtext[[:space:]]' <<< "$filters"
           buildconf="$(docker run --rm -v "$OUTDIR/$dest:/pkg:ro" \
             debian:bookworm-slim /pkg/ffmpeg -hide_banner -buildconf)"
-          for flag in --enable-cairo --enable-fontconfig --enable-libfreetype --enable-libharfbuzz --enable-libfribidi; do
+          for flag in --enable-librsvg --enable-cairo --enable-fontconfig --enable-libfreetype --enable-libharfbuzz --enable-libfribidi; do
             grep -Fq -- "$flag" <<< "$buildconf"
           done
           printf '%s' 'ErsatzRS' > "$OUTDIR/$dest/drawtext-proof.txt"
@@ -171,6 +184,7 @@ jobs:
               -vf 'drawtext=fontfile=/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf:textfile=/pkg/drawtext-proof.txt:reload=1:fontsize=16:x=4:y=4,format=yuv420p' \
               -frames:v 1 -f null -"
           rm "$OUTDIR/$dest/drawtext-proof.txt"
+          python3 "$GITHUB_WORKSPACE/scripts/verify-svg.py" "$OUTDIR/$dest/ffmpeg"
           pkg="${dest}.tar.gz"
           tar -C "$OUTDIR" -czf "$OUTDIR/$pkg" "$dest"
           ( cd "$OUTDIR" && sha256sum "$pkg" > "$pkg.sha256" )
@@ -232,7 +246,15 @@ jobs:
           cd "$WORK"
           python3 "$GITHUB_WORKSPACE/images/ffmpeg-builds/prepare-patches.py" "$WORK" win64
           ./makeimage.sh win64 gpl 9.0
-          GIT_BRANCH_OVERRIDE="$FFTAG" ./build.sh win64 gpl 9.0
+          svg_image="ersatzrs-ffmpeg-svg:win64-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          base_image="ghcr.io/${GITHUB_REPOSITORY,,}/win64-gpl-9.0:latest"
+          docker build --build-arg BASE_IMAGE="$base_image" --build-arg FFBUILD_JOBS=8 \
+            -t "$svg_image" "$GITHUB_WORKSPACE/images/ffmpeg-builds/svg"
+          image_id="$(docker image inspect --format '{{.Id}}' "$svg_image")"
+          printf '%s\n' "$image_id" > "$WORK/svg-image-id.txt"
+          docker run --rm --network none --entrypoint tar "$image_id" \
+            -C /opt -cf - ersatzrs-svg-sources > "$WORK/svg-sources.tar"
+          FFBUILD_IMAGE_OVERRIDE="$image_id" GIT_BRANCH_OVERRIDE="$FFTAG" ./build.sh win64 gpl 9.0
 
       - name: Repackage to ErsatzRS layout
         # BtbN emits <build-name>/bin/{ffmpeg,ffprobe}.exe; ErsatzRS expects the
@@ -249,6 +271,11 @@ jobs:
           unzip -q "$src_zip" -d "$tmp"
           dest="ersatzrs-ffmpeg-${VERSION}-win-x64"
           rm -rf "${OUTDIR:?}/$dest" && mkdir -p "$OUTDIR/$dest"
+          mkdir -p "$OUTDIR/$dest/build-info"
+          tar -xf "$WORK/svg-sources.tar" -C "$OUTDIR/$dest/build-info"
+          cp "$WORK/svg-image-id.txt" "$OUTDIR/$dest/build-info/"
+          ( cd "$WORK/ersatzrs-patches" && sha256sum *.patch ) \
+            > "$OUTDIR/$dest/build-info/patches.sha256"
           find "$tmp" -name ffmpeg.exe  -exec cp {} "$OUTDIR/$dest/" \;
           find "$tmp" -name ffprobe.exe -exec cp {} "$OUTDIR/$dest/" \;
           find "$tmp" -iname 'LICENSE*'  -exec cp {} "$OUTDIR/$dest/" \;
@@ -276,6 +303,12 @@ jobs:
       actions: read
       contents: read
     steps:
+      - name: Checkout verification scripts
+        uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
       - name: Download win-x64 artifact
         shell: pwsh
         env:
@@ -319,7 +352,7 @@ jobs:
             if ($filters -notmatch "(?m)^.*\s$filter\s") { throw "missing required filter $filter" }
           }
           $buildconf = (& $ffmpeg.FullName -hide_banner -buildconf 2>&1) -join "`n"
-          foreach ($flag in '--enable-cairo', '--enable-fontconfig', '--enable-libfreetype', '--enable-libharfbuzz', '--enable-libfribidi') {
+          foreach ($flag in '--enable-librsvg', '--enable-cairo', '--enable-fontconfig', '--enable-libfreetype', '--enable-libharfbuzz', '--enable-libfribidi') {
             if (-not $buildconf.Contains($flag)) { throw "missing required build flag $flag" }
           }
           $proof = Join-Path $env:RUNNER_TEMP 'drawtext proof'
@@ -333,6 +366,14 @@ jobs:
           } finally {
             Pop-Location
           }
+
+      - name: Execute decoded SVG package proof
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $ffmpeg = Get-ChildItem -Path $env:package_root -Filter 'ffmpeg.exe' -Recurse | Select-Object -First 1
+          python scripts/verify-svg.py $ffmpeg.FullName
+          if ($LASTEXITCODE -ne 0) { throw 'decoded SVG verification failed' }
 
   release:
     name: Publish release

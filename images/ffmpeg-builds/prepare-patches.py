@@ -10,6 +10,10 @@ work = Path(sys.argv[1]).resolve()
 platform = sys.argv[2]
 script = work / "build.sh"
 text = script.read_text()
+vars_anchor = 'source util/vars.sh\n'
+if text.count(vars_anchor) != 1:
+    raise SystemExit("Pinned BtbN variable setup changed; review image override")
+text = text.replace(vars_anchor, vars_anchor + 'IMAGE="${FFBUILD_IMAGE_OVERRIDE:-$IMAGE}"\n')
 anchor = "    cd ffmpeg\n"
 mount = '-v "$BUILD_SCRIPT":/build.sh'
 if text.count(anchor) != 1 or text.count(mount) != 1:
@@ -25,5 +29,6 @@ text = text.replace(mount, mount + ' -v "$PWD/ersatzrs-patches":/ersatzrs-patche
 patches = Path(__file__).parent / "patches"
 shutil.copytree(patches / "common", work / "ersatzrs-patches")
 if platform == "win64":
-    shutil.copy2(patches / "0001-vulkan-cuda-export.patch", work / "ersatzrs-patches")
+    for patch in sorted((patches / "windows").glob("*.patch")):
+        shutil.copy2(patch, work / "ersatzrs-patches")
 script.write_text(text)

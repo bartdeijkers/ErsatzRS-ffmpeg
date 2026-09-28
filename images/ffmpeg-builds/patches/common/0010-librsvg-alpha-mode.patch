@@ -1,0 +1,12 @@
+diff --git a/libavcodec/librsvgdec.c b/libavcodec/librsvgdec.c
+index f0566eb5d8..e02e063bae 100644
+--- a/libavcodec/librsvgdec.c
++++ b/libavcodec/librsvgdec.c
+@@ -90,6 +90,7 @@ static int librsvg_decode_frame(AVCodecContext *avctx, AVFrame *frame,
+         goto end;
+ 
+     avctx->pix_fmt = AV_PIX_FMT_RGB32;
++    avctx->alpha_mode = AVALPHA_MODE_PREMULTIPLIED;
+ 
+     ret = ff_get_buffer(avctx, frame, 0);
+     if (ret < 0)
