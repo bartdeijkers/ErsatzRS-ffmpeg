@@ -215,3 +215,21 @@ python3 scripts/verify-svg.py <package>/ffmpeg.exe
 
 Retain the existing drawvg/drawtext, sparse-subtitle playback, Linux baseline
 and native Windows Vulkan/CUDA checks. SVG support does not replace those gates.
+
+## Legacy QSV corrections (8.1.2-2 counterpart)
+
+The common FFmpeg patches 0011-0013 retain compatible fixed decoder pools,
+initialize individual D3D11 texture indices without writing beyond VAAPI/D3D9
+single handles, and transfer D3D11 frames through their child context. They
+apply to the pinned FFmpeg 9 sources alongside the prior corrections.
+
+`onevpl/Dockerfile` extends the completed SVG dependency image by exact image
+ID (via a local tag named for and checked against that ID), rebuilding only the statically linked oneVPL dispatcher at its existing
+`d77f9195` revision with the legacy adapter/device-ID correction. This preserves
+cached librsvg and all other dependencies. Source identity, license and patch
+checksum accompany the existing `ersatzrs-svg-sources` build metadata. Docker
+runs from the host; no container needs a Docker socket.
+
+Compilation and software/available NVIDIA regression evidence are required
+before publishing replacement packages. Intel QSV hardware acceptance remains
+explicitly unverified; source applicability is not runtime proof.

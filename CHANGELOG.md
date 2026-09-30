@@ -20,6 +20,18 @@ All notable changes are documented here using Keep a Changelog categories.
   data streams are present, preserving sparse-only input fallback. Apply the
   correction to Linux and Windows packages and every Linux container architecture.
 
+## [2.0.4] - 2026-09-30
+
+### Fixed
+
+- Preserve fixed QSV decoder frame pools across compatible stream-parameter
+  changes, avoiding downstream legacy Media SDK encoder failures.
+- Initialize D3D11 QSV texture indices and transfer frames through the D3D11
+  child context, preserving VAAPI/D3D9 single-handle safety.
+- Patch the statically linked oneVPL dispatcher to find legacy Windows Intel
+  runtimes on non-primary adapters and recover missing device IDs.
+  Intel QSV hardware validation remains explicitly unverified.
+
 ## [2.0.3] - 2026-09-28
 
 ### Added
@@ -49,5 +61,6 @@ All notable changes are documented here using Keep a Changelog categories.
   combined VPP operations. Restore the Windows D3D11 render-target texture and
   pool allocation behaviour required by the upstream QSV pipeline.
 
-[Unreleased]: https://github.com/bartdeijkers/ErsatzRS-ffmpeg/compare/v2.0.3...HEAD
+[Unreleased]: https://github.com/bartdeijkers/ErsatzRS-ffmpeg/compare/v2.0.4...HEAD
 [2.0.3]: https://github.com/bartdeijkers/ErsatzRS-ffmpeg/releases/tag/v2.0.3
+[2.0.4]: https://github.com/bartdeijkers/ErsatzRS-ffmpeg/compare/v2.0.3...v2.0.4

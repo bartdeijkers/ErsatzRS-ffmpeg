@@ -113,7 +113,16 @@ jobs:
           base_image="ghcr.io/${GITHUB_REPOSITORY,,}/linux64-gpl-9.0:latest"
           docker build --build-arg BASE_IMAGE="$base_image" --build-arg FFBUILD_JOBS=8 \
             -t "$svg_image" "$GITHUB_WORKSPACE/images/ffmpeg-builds/svg"
-          image_id="$(docker image inspect --format '{{.Id}}' "$svg_image")"
+          svg_image_id="$(docker image inspect --format '{{.Id}}' "$svg_image")"
+          # BuildKit resolves FROM as an image name, not a bare local image ID.
+          pinned_base="ersatzrs-ffmpeg-build-base:${svg_image_id#sha256:}"
+          docker tag "$svg_image_id" "$pinned_base"
+          test "$(docker image inspect --format '{{.Id}}' "$pinned_base")" = "$svg_image_id"
+          qsv_image="${svg_image}-qsv"
+          docker build --build-arg BASE_IMAGE="$pinned_base" \
+            -f "$GITHUB_WORKSPACE/images/ffmpeg-builds/onevpl/Dockerfile" \
+            -t "$qsv_image" "$GITHUB_WORKSPACE/images/ffmpeg-builds"
+          image_id="$(docker image inspect --format '{{.Id}}' "$qsv_image")"
           printf '%s\n' "$image_id" > "$WORK/svg-image-id.txt"
           docker run --rm --network none --entrypoint tar "$image_id" \
             -C /opt -cf - ersatzrs-svg-sources > "$WORK/svg-sources.tar"
@@ -250,7 +259,16 @@ jobs:
           base_image="ghcr.io/${GITHUB_REPOSITORY,,}/win64-gpl-9.0:latest"
           docker build --build-arg BASE_IMAGE="$base_image" --build-arg FFBUILD_JOBS=8 \
             -t "$svg_image" "$GITHUB_WORKSPACE/images/ffmpeg-builds/svg"
-          image_id="$(docker image inspect --format '{{.Id}}' "$svg_image")"
+          svg_image_id="$(docker image inspect --format '{{.Id}}' "$svg_image")"
+          # BuildKit resolves FROM as an image name, not a bare local image ID.
+          pinned_base="ersatzrs-ffmpeg-build-base:${svg_image_id#sha256:}"
+          docker tag "$svg_image_id" "$pinned_base"
+          test "$(docker image inspect --format '{{.Id}}' "$pinned_base")" = "$svg_image_id"
+          qsv_image="${svg_image}-qsv"
+          docker build --build-arg BASE_IMAGE="$pinned_base" \
+            -f "$GITHUB_WORKSPACE/images/ffmpeg-builds/onevpl/Dockerfile" \
+            -t "$qsv_image" "$GITHUB_WORKSPACE/images/ffmpeg-builds"
+          image_id="$(docker image inspect --format '{{.Id}}' "$qsv_image")"
           printf '%s\n' "$image_id" > "$WORK/svg-image-id.txt"
           docker run --rm --network none --entrypoint tar "$image_id" \
             -C /opt -cf - ersatzrs-svg-sources > "$WORK/svg-sources.tar"
