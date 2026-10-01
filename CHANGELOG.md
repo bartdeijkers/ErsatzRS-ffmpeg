@@ -4,6 +4,20 @@ All notable changes are documented here using Keep a Changelog categories.
 
 ## [Unreleased]
 
+### Added
+
+- Add pinned ARM64 and ARMv7 static-codec package build recipes, with source,
+  dependency image and checksum provenance. ARM package acceptance uses clean
+  Bookworm execution and decoded software playback; native ARM hardware and
+  application acceptance remain unverified.
+
+### Changed
+
+- Keep the accepted v2.0.4 Linux x64 and Windows archives unchanged when adding
+  ARM packages. Package and executable checksums identify the reused artifacts.
+- Support OpenAPV 1.1's metadata API in new dependency builds while retaining
+  compatibility with the older API used by existing x64 packages.
+
 ### Fixed
 
 - Publish the Docker `9.0` tag as a literal version instead of rejecting it as

@@ -1,0 +1,13 @@
+[binaries]
+c = 'arm-linux-gnueabihf-gcc'
+cpp = 'arm-linux-gnueabihf-g++'
+ld = 'arm-linux-gnueabihf-ld'
+ar = 'arm-linux-gnueabihf-gcc-ar'
+ranlib = 'arm-linux-gnueabihf-gcc-ranlib'
+strip = 'arm-linux-gnueabihf-strip'
+
+[host_machine]
+system = 'linux'
+cpu_family = 'arm'
+cpu = 'armv7'
+endian = 'little'

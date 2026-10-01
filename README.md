@@ -13,3 +13,10 @@ These FFmpeg 9.0 images are built with `--enable-cairo`, `--enable-libharfbuzz`,
 `--enable-libzimg` (for `zscale`) and the `libsvtav1` encoder, in addition to the codecs inherited from upstream.
 Release and container builds fail unless both graphics filters, the complete text-shaping stack, and a real
 file-backed `drawtext` render are available.
+
+## Downloadable ARM packages
+
+See [ARM package build and acceptance](images/ffmpeg-builds/ARM-PACKAGES.md)
+for pinned dependency inputs, bounded host Docker builds, archive provenance,
+and the required software runtime checks. Native hardware acceptance is tracked
+separately from emulated software execution.

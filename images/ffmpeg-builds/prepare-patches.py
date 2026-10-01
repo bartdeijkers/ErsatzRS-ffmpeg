@@ -4,8 +4,8 @@ import shutil
 import sys
 from pathlib import Path
 
-if len(sys.argv) != 3 or sys.argv[2] not in ("linux64", "win64"):
-    raise SystemExit("usage: prepare-patches.py BUILD_TREE {linux64|win64}")
+if len(sys.argv) != 3 or sys.argv[2] not in ("linux64", "linuxarm64", "linuxarmv7", "win64"):
+    raise SystemExit("usage: prepare-patches.py BUILD_TREE {linux64|linuxarm64|linuxarmv7|win64}")
 work = Path(sys.argv[1]).resolve()
 platform = sys.argv[2]
 script = work / "build.sh"
