@@ -4,20 +4,6 @@ All notable changes are documented here using Keep a Changelog categories.
 
 ## [Unreleased]
 
-### Added
-
-- Add pinned ARM64 and ARMv7 static-codec package build recipes, with source,
-  dependency image and checksum provenance. ARM package acceptance uses clean
-  Bookworm execution and decoded software playback; native ARM hardware and
-  application acceptance remain unverified.
-
-### Changed
-
-- Keep the accepted v2.0.4 Linux x64 and Windows archives unchanged when adding
-  ARM packages. Package and executable checksums identify the reused artifacts.
-- Support OpenAPV 1.1's metadata API in new dependency builds while retaining
-  compatibility with the older API used by existing x64 packages.
-
 ### Fixed
 
 - Publish the Docker `9.0` tag as a literal version instead of rejecting it as
@@ -33,6 +19,22 @@ All notable changes are documented here using Keep a Changelog categories.
 - Pace media reading from active audio/video streams when sparse subtitle or
   data streams are present, preserving sparse-only input fallback. Apply the
   correction to Linux and Windows packages and every Linux container architecture.
+
+## [2.0.5] - 2026-10-01
+
+### Added
+
+- Add pinned ARM64 and ARMv7 static-codec package build recipes, with source,
+  dependency image and checksum provenance. ARM package acceptance uses clean
+  Bookworm execution and decoded software playback; native ARM hardware and
+  application acceptance remain unverified.
+
+### Changed
+
+- Keep the accepted v2.0.4 Linux x64 and Windows archives unchanged when adding
+  ARM packages. Package and executable checksums identify the reused artifacts.
+- Support OpenAPV 1.1's metadata API in new dependency builds while retaining
+  compatibility with the older API used by existing x64 packages.
 
 ## [2.0.4] - 2026-09-30
 
@@ -75,6 +77,9 @@ All notable changes are documented here using Keep a Changelog categories.
   combined VPP operations. Restore the Windows D3D11 render-target texture and
   pool allocation behaviour required by the upstream QSV pipeline.
 
-[Unreleased]: https://github.com/bartdeijkers/ErsatzRS-ffmpeg/compare/v2.0.4...HEAD
+[Unreleased]: https://github.com/bartdeijkers/ErsatzRS-ffmpeg/compare/v2.0.5...HEAD
 [2.0.3]: https://github.com/bartdeijkers/ErsatzRS-ffmpeg/releases/tag/v2.0.3
 [2.0.4]: https://github.com/bartdeijkers/ErsatzRS-ffmpeg/compare/v2.0.3...v2.0.4
+
+[2.0.5]: https://github.com/bartdeijkers/ErsatzRS-ffmpeg/compare/v2.0.4...v2.0.5
+[2.0.4]: https://github.com/bartdeijkers/ErsatzRS-ffmpeg/releases/tag/v2.0.4
