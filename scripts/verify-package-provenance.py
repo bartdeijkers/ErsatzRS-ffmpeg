@@ -7,6 +7,7 @@ as the binary build origin.
 """
 import argparse
 import hashlib
+import io
 import json
 import os
 from pathlib import Path, PurePosixPath
@@ -46,6 +47,35 @@ def expected_patches(rid):
         folders.append(ROOT / "images/ffmpeg-builds/patches/windows")
     return {p.relative_to(ROOT).as_posix(): digest(p)
             for folder in folders for p in folder.glob("*.patch")}
+
+
+def restore_inputs():
+    """Restore this job's build inputs from raw Git blobs, bypassing CRLF filters.
+
+    Git may preserve unchanged files from a previous checkout despite a new
+    eol attribute. Archive bytes identify the actual verification commit.
+    """
+    archive = subprocess.run(["git", "archive", "--format=tar", "HEAD", "images"],
+                             cwd=ROOT, capture_output=True, check=True, timeout=30)
+    tracked = {p.decode("utf-8") for p in subprocess.check_output(
+        ["git", "ls-files", "-z", "images"], cwd=ROOT, timeout=30).split(b"\0") if p}
+    restored = set()
+    with tarfile.open(fileobj=io.BytesIO(archive.stdout)) as source:
+        for member in source:
+            if member.isdir():
+                continue
+            path = PurePosixPath(member.name)
+            require(member.isfile() and member.name in tracked and
+                    not path.is_absolute() and ".." not in path.parts,
+                    "unexpected committed build input")
+            destination = ROOT.joinpath(*path.parts)
+            require(not destination.is_symlink(), "build input destination is a symlink")
+            destination.parent.mkdir(parents=True, exist_ok=True)
+            with source.extractfile(member) as data, destination.open("wb") as output:
+                shutil.copyfileobj(data, output)
+            restored.add(member.name)
+    require(restored == tracked, "committed build input inventory differs")
+    print(json.dumps({"restored_committed_build_inputs": len(restored)}))
 
 
 def load_manifest(path, expected_hash):
@@ -228,6 +258,7 @@ def verify_runtime(root):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     sub = parser.add_subparsers(dest="command", required=True)
+    sub.add_parser("restore-inputs", help="restore exact Git bytes in this job's checkout")
     download = sub.add_parser("download")
     download.add_argument("--candidate-tag", required=True)
     download.add_argument("--manifest-sha256", required=True)
@@ -237,6 +268,9 @@ def main():
     runtime = sub.add_parser("runtime")
     runtime.add_argument("package_root", type=Path)
     args = parser.parse_args()
+    if args.command == "restore-inputs":
+        restore_inputs()
+        return
     if args.command == "runtime":
         verify_runtime(args.package_root.resolve())
         return
