@@ -1,3 +1,5 @@
 # Unified diffs use a single space for blank context lines.
+# Package provenance hashes must identify the same build inputs on every host.
+images/** text=auto eol=lf
 images/ffmpeg-builds/patches/*.patch whitespace=-blank-at-eol
 images/ffmpeg-builds/patches/common/*.patch whitespace=-blank-at-eol,-blank-at-eof
