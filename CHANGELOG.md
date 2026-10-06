@@ -4,7 +4,7 @@ All notable changes are documented here using Keep a Changelog categories.
 
 ## [Unreleased]
 
-## [2.0.6] - 2026-10-06
+## [2.0.6] - 2026-10-07
 
 ### Fixed
 

@@ -122,6 +122,10 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw 'Exact source input checkout failed' }
       - name: Set up Python
         uses: actions/setup-python@v5
+        # The action invokes Windows PowerShell during installation. Scope its
+        # script permission to this step's process tree, leaving host policy alone.
+        env:
+          PSExecutionPolicyPreference: Bypass
         with:
           python-version: '3.12'
       - name: Download and verify exact archive provenance
