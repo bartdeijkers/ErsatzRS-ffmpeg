@@ -1,0 +1,13 @@
+--- a/libavformat/webp_anim_dec.c
++++ b/libavformat/webp_anim_dec.c
+@@ -270,6 +270,10 @@
+             ret = av_get_packet(pb, pkt, size);
+             if (ret < 0)
+                 return ret;
++            /* Generic seeking must return to the ANMF header, not its payload. */
++            pkt->pos = offset;
++            if (offset == ctx->first_anmf_offset)
++                ctx->cur_frame = 0;
+             if (!ctx->cur_frame++)
+                 pkt->flags |= AV_PKT_FLAG_KEY;
+             pkt->pts = AV_NOPTS_VALUE;

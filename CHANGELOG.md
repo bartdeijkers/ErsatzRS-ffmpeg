@@ -4,7 +4,15 @@ All notable changes are documented here using Keep a Changelog categories.
 
 ## [Unreleased]
 
+## [2.0.6] - 2026-10-06
+
 ### Fixed
+
+- Repeat complete animated WebP frames after generic loop rewinds and fractional
+  seeks, preserving embedded finite/infinite loops and bounded output. Rebuild
+  Linux x64, Windows x64, ARM64 and ARMv7 packages with the same correction.
+- Backport FFmpeg's ICC/EXIF exact-read safety fix so truncated animated WebP
+  metadata is removed instead of exposing incomplete side data.
 
 - Publish the Docker `9.0` tag as a literal version instead of rejecting it as
   incomplete semver. Allow a tested image digest to be published manually
@@ -19,6 +27,18 @@ All notable changes are documented here using Keep a Changelog categories.
 - Pace media reading from active audio/video streams when sparse subtitle or
   data streams are present, preserving sparse-only input fallback. Apply the
   correction to Linux and Windows packages and every Linux container architecture.
+
+### Added
+
+- Verify checksum-pinned prepared packages on Linux, native Windows and emulated
+  ARM before publication, including source/patch provenance, decoded graphics,
+  animation, sparse subtitles and alternate audio. Reuse those package bytes
+  without a second release build; hardware acceptance debt remains unverified.
+
+### Changed
+
+- Support native Windows pipe progress and file paths in sparse-playback checks,
+  retaining bounded execution and owned-process cleanup.
 
 ## [2.0.5] - 2026-10-01
 
@@ -77,7 +97,8 @@ All notable changes are documented here using Keep a Changelog categories.
   combined VPP operations. Restore the Windows D3D11 render-target texture and
   pool allocation behaviour required by the upstream QSV pipeline.
 
-[Unreleased]: https://github.com/bartdeijkers/ErsatzRS-ffmpeg/compare/v2.0.5...HEAD
+[Unreleased]: https://github.com/bartdeijkers/ErsatzRS-ffmpeg/compare/v2.0.6...HEAD
+[2.0.6]: https://github.com/bartdeijkers/ErsatzRS-ffmpeg/compare/v2.0.5...v2.0.6
 [2.0.3]: https://github.com/bartdeijkers/ErsatzRS-ffmpeg/releases/tag/v2.0.3
 [2.0.4]: https://github.com/bartdeijkers/ErsatzRS-ffmpeg/compare/v2.0.3...v2.0.4
 

@@ -1,0 +1,174 @@
+name: Verify existing v2.0.6 packages
+
+# This is an execution gate for already built, checksum-pinned packages. It
+# neither builds FFmpeg nor publishes packages or Docker images. Publication
+# must reuse the exact manifest and archive bytes from the successful run.
+on:
+  workflow_dispatch:
+    inputs:
+      candidate_tag:
+        description: 'Draft release tag runtime-candidate-2.0.6-<source checkpoint>'
+        required: true
+        type: string
+      manifest_sha256:
+        description: 'Exact SHA-256 of candidate-manifest.json (64 lowercase hex characters)'
+        required: true
+        type: string
+
+permissions:
+  # GitHub restricts unpublished draft-release assets to push-capable tokens.
+  # This grant enables their download; every workflow step remains read-only
+  # toward the repository and releases (no build or publication operation).
+  contents: write
+
+jobs:
+  linux:
+    name: Verify ${{ matrix.rid }} existing package
+    runs-on: [self-hosted, ersatzrs-linux-release]
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      max-parallel: 1
+      matrix:
+        include:
+          - rid: linux-x64
+            platform: linux/amd64
+            image: sha256:3783cc01769c7b2b1b83a5c5ad96c815348e28ed7da68e2e3687004faa906251
+          - rid: linux-arm64
+            platform: linux/arm64
+            image: sha256:36a02d2092f6a852cd64829052939fdb03bbdbada6fa3b7cf0046d56bb8f168d
+          - rid: linux-arm
+            platform: linux/arm/v7
+            image: sha256:7d1a24f03134958570dc03371b360e7c875b8c385a28b5f0f306e3e5bb1a6267
+    steps:
+      - name: Checkout verification inputs
+        uses: actions/checkout@v4
+      - name: Preserve exact committed input bytes
+        # Runner-wide autocrlf settings must not change patch/input checksums.
+        shell: bash
+        run: git -c core.autocrlf=false -c core.eol=lf checkout-index --all --force
+      - name: Download and verify exact archive provenance
+        env:
+          GH_TOKEN: ${{ github.token }}
+          CANDIDATE_TAG: ${{ inputs.candidate_tag }}
+          MANIFEST_SHA256: ${{ inputs.manifest_sha256 }}
+          RID: ${{ matrix.rid }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          work="$(mktemp -d "$RUNNER_TEMP/ffmpeg-package-verify.XXXXXXXX")"
+          echo "VERIFY_WORK=$work" >> "$GITHUB_ENV"
+          python3 scripts/verify-package-provenance.py download \
+            --candidate-tag "$CANDIDATE_TAG" --manifest-sha256 "$MANIFEST_SHA256" \
+            --repo "$GITHUB_REPOSITORY" --rid "$RID" --output "$work/download" \
+            | tee "$work/provenance.json"
+      - name: Execute package in pinned Debian Bookworm baseline
+        # ARM software execution uses the existing QEMU registration and cached
+        # clean acceptance images. It does not establish native hardware parity.
+        # All Docker calls go directly to the host daemon; no socket is mounted.
+        env:
+          RID: ${{ matrix.rid }}
+          PLATFORM: ${{ matrix.platform }}
+          ACCEPTANCE_IMAGE: ${{ matrix.image }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(docker image inspect --format '{{.Id}}' "$ACCEPTANCE_IMAGE")" = "$ACCEPTANCE_IMAGE"
+          pkg="$VERIFY_WORK/download/expanded/ersatzrs-ffmpeg-2.0.6-$RID"
+          # Install test tooling only in the disposable AMD64 baseline container;
+          # ARM images already contain Python and DejaVu. Package mounts are read-only.
+          setup=''
+          if [ "$RID" = linux-x64 ]; then
+            setup='apt-get update -qq && apt-get install -yqq --no-install-recommends python3 fonts-dejavu-core >/dev/null &&'
+          fi
+          docker run --rm --platform "$PLATFORM" \
+            -v "$pkg:/pkg:ro" -v "$GITHUB_WORKSPACE/scripts:/checks:ro" \
+            --entrypoint sh "$ACCEPTANCE_IMAGE" -ec \
+            "$setup python3 /checks/verify-package-provenance.py runtime /pkg && \
+            python3 /checks/verify-svg.py /pkg/ffmpeg && \
+            python3 /checks/verify-webp.py /pkg/ffmpeg && \
+            python3 /checks/verify-sparse-playback.py /pkg/ffmpeg" \
+            > "$VERIFY_WORK/runtime.log" 2>&1
+          cat "$VERIFY_WORK/runtime.log"
+      - name: Upload verification evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: verified-existing-${{ matrix.rid }}
+          path: |
+            ${{ env.VERIFY_WORK }}/provenance.json
+            ${{ env.VERIFY_WORK }}/runtime.log
+            ${{ env.VERIFY_WORK }}/download/candidate-manifest.json
+          if-no-files-found: warn
+      - name: Remove this job's temporary copies
+        if: always()
+        shell: bash
+        run: |
+          if [ -n "${VERIFY_WORK:-}" ]; then
+            case "$VERIFY_WORK" in "$RUNNER_TEMP"/ffmpeg-package-verify.*) rm -rf -- "$VERIFY_WORK" ;; *) exit 1 ;; esac
+          fi
+
+  windows:
+    name: Verify win-x64 existing package natively
+    runs-on: [self-hosted, ersatzrs-windows-release]
+    timeout-minutes: 20
+    steps:
+      - name: Checkout verification inputs
+        uses: actions/checkout@v4
+      - name: Preserve exact committed input bytes
+        shell: pwsh
+        run: |
+          git -c core.autocrlf=false -c core.eol=lf checkout-index --all --force
+          if ($LASTEXITCODE -ne 0) { throw 'Exact source input checkout failed' }
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Download and verify exact archive provenance
+        env:
+          GH_TOKEN: ${{ github.token }}
+          CANDIDATE_TAG: ${{ inputs.candidate_tag }}
+          MANIFEST_SHA256: ${{ inputs.manifest_sha256 }}
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $work = Join-Path $env:RUNNER_TEMP ('ffmpeg-package-verify.' + [guid]::NewGuid().ToString('N'))
+          New-Item -ItemType Directory -Path $work | Out-Null
+          "VERIFY_WORK=$work" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          python scripts/verify-package-provenance.py download --candidate-tag $env:CANDIDATE_TAG --manifest-sha256 $env:MANIFEST_SHA256 --repo $env:GITHUB_REPOSITORY --rid win-x64 --output (Join-Path $work 'download') | Tee-Object -FilePath (Join-Path $work 'provenance.json')
+          if ($LASTEXITCODE -ne 0) { throw 'Package provenance verification failed' }
+      - name: Execute exact package natively
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $pkg = Join-Path $env:VERIFY_WORK 'download/expanded/ersatzrs-ffmpeg-2.0.6-win-x64'
+          $tool = Join-Path $pkg 'ffmpeg.exe'
+          $log = Join-Path $env:VERIFY_WORK 'runtime.log'
+          python scripts/verify-package-provenance.py runtime $pkg | Tee-Object -FilePath $log
+          if ($LASTEXITCODE -ne 0) { throw 'FFmpeg 9 and decoded drawtext verification failed' }
+          python scripts/verify-svg.py $tool | Tee-Object -FilePath $log -Append
+          if ($LASTEXITCODE -ne 0) { throw 'Decoded SVG verification failed' }
+          python scripts/verify-webp.py $tool | Tee-Object -FilePath $log -Append
+          if ($LASTEXITCODE -ne 0) { throw 'Animated WebP verification failed' }
+          python scripts/verify-sparse-playback.py $tool | Tee-Object -FilePath $log -Append
+          if ($LASTEXITCODE -ne 0) { throw 'Sparse subtitles, pacing and selected audio verification failed' }
+      - name: Upload verification evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: verified-existing-win-x64
+          path: |
+            ${{ env.VERIFY_WORK }}/provenance.json
+            ${{ env.VERIFY_WORK }}/runtime.log
+            ${{ env.VERIFY_WORK }}/download/candidate-manifest.json
+          if-no-files-found: warn
+      - name: Remove this job's temporary copies
+        if: always()
+        shell: pwsh
+        run: |
+          if ($env:VERIFY_WORK) {
+            $parent = [IO.Path]::GetDirectoryName($env:VERIFY_WORK)
+            $name = [IO.Path]::GetFileName($env:VERIFY_WORK)
+            if ($parent -ne $env:RUNNER_TEMP -or $name -notlike 'ffmpeg-package-verify.*') { throw 'Unsafe cleanup path' }
+            Remove-Item -LiteralPath $env:VERIFY_WORK -Recurse -Force
+          }

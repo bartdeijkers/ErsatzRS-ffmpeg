@@ -59,7 +59,9 @@ env:
 jobs:
   linux-x64:
     name: Build linux-x64 package
-    if: ${{ github.event_name != 'workflow_dispatch' || github.event.inputs.target == 'all' || github.event.inputs.target == 'linux-x64' }}
+    # v2.0.6 publishes the exact prebuilt packages gated by verify-packages.yml.
+    # A tag push must not rebuild different bytes; explicit dispatch remains available.
+    if: ${{ (github.event_name == 'workflow_dispatch' || github.ref_name != 'v2.0.6') && (github.event_name != 'workflow_dispatch' || github.event.inputs.target == 'all' || github.event.inputs.target == 'linux-x64') }}
     runs-on: [self-hosted, ersatzrs-linux-release]
     # No registry login / image push here: the ghcr ersatzrs-ffmpeg image is
     # built and pushed by multi-platform.yml. This job only produces the static
@@ -212,7 +214,7 @@ jobs:
 
   win-x64:
     name: Build win-x64 package
-    if: ${{ github.event_name != 'workflow_dispatch' || github.event.inputs.target == 'all' || github.event.inputs.target == 'win-x64' }}
+    if: ${{ (github.event_name == 'workflow_dispatch' || github.ref_name != 'v2.0.6') && (github.event_name != 'workflow_dispatch' || github.event.inputs.target == 'all' || github.event.inputs.target == 'win-x64') }}
     # Statically cross-compiled with BtbN/FFmpeg-Builds (Docker) so the package
     # ships two self-contained executables instead of a thin .exe + DLL closure.
     # Runs on the Linux release runner (Docker), not the Windows runner.
@@ -318,7 +320,7 @@ jobs:
 
   win-x64-verify:
     name: Verify win-x64 graphics contract
-    if: ${{ github.event_name != 'workflow_dispatch' || github.event.inputs.target == 'all' || github.event.inputs.target == 'win-x64' }}
+    if: ${{ (github.event_name == 'workflow_dispatch' || github.ref_name != 'v2.0.6') && (github.event_name != 'workflow_dispatch' || github.event.inputs.target == 'all' || github.event.inputs.target == 'win-x64') }}
     needs: win-x64
     runs-on: [self-hosted, ersatzrs-windows-release]
     permissions:
@@ -400,7 +402,7 @@ jobs:
   release:
     name: Publish release
     # Only publish for an actual tag push; workflow_dispatch is build-only.
-    if: ${{ github.event_name == 'push' }}
+    if: ${{ github.event_name == 'push' && github.ref_name != 'v2.0.6' }}
     needs: [linux-x64, win-x64, win-x64-verify]
     runs-on: [self-hosted, ersatzrs-linux-release]
     permissions:

@@ -104,4 +104,6 @@ identity and executable/archive SHA-256 checksums. Require clean Bookworm
 execution, required encoders/filters, decoded drawvg/drawtext and SVG output,
 and sparse-subtitle audio/video pacing. Emulation proves software execution;
 it does not prove native hardware acceleration or application-level acceptance.
-Keep the already accepted x64 and Windows package bytes unchanged.
+Version 2.0.5 reused the accepted x64 and Windows package bytes. Version 2.0.6
+rebuilds all four RIDs because its animated WebP fixes affect every package.
+Retain the immutable older releases for existing explicit pins.

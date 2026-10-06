@@ -2,22 +2,24 @@
 """Verify bounded pacing, sparse PGS rendering and alternate audio.
 
 Usage: python3 scripts/verify-sparse-playback.py /path/to/ffmpeg[.exe]
-The sibling ffprobe is required. Windows executables run through WSL interop;
-all paths belong to a disposable synthetic fixture. No user media is accessed.
+The sibling ffprobe is required. Runs natively on Windows and Linux, or with
+Windows executables through WSL interop. All paths belong to a disposable
+synthetic fixture. No user media is accessed.
 """
-import json, pathlib, selectors, struct, subprocess, tempfile, time, sys
+import json, os, pathlib, queue, struct, subprocess, tempfile, threading, time, sys
 
 workspace = tempfile.TemporaryDirectory(prefix="ersatzrs-readrate-")
 root = pathlib.Path(workspace.name)
 ffmpeg = pathlib.Path(sys.argv[1])
 ffprobe = ffmpeg.with_name("ffprobe" + ffmpeg.suffix)
-windows = ffmpeg.suffix == ".exe"
+windows = ffmpeg.suffix.lower() == ".exe"
+windows_interop = windows and os.name != "nt"
 
 
 def path(p):
     return (
-        subprocess.check_output(["wslpath", "-w", str(p)], text=True).strip()
-        if windows
+        subprocess.check_output(["wslpath", "-w", str(p)], text=True, timeout=10).strip()
+        if windows_interop
         else str(p)
     )
 
@@ -53,17 +55,46 @@ def pace(args):
             stdout=subprocess.PIPE,
             stderr=errors,
         )
-        selector = selectors.DefaultSelector()
-        selector.register(process.stdout, selectors.EVENT_READ)
+        # Native Windows selectors cannot monitor subprocess pipe handles.
+        # A bounded queue and one owned reader work on every supported host.
+        events = queue.Queue(maxsize=64)
+        stop_reader = threading.Event()
+
+        def publish(data):
+            event = (time.monotonic(), data)
+            while not stop_reader.is_set():
+                try:
+                    events.put(event, timeout=0.25)
+                    return
+                except queue.Full:
+                    continue
+
+        def read_progress():
+            try:
+                while not stop_reader.is_set():
+                    data = process.stdout.read1(4096)
+                    if not data:
+                        break
+                    publish(data)
+            except Exception as error:
+                publish(error)
+            finally:
+                publish(None)
+
+        reader = threading.Thread(target=read_progress, name="ffmpeg-progress", daemon=True)
+        reader.start()
         try:
             while True:
                 if time.monotonic() - start > 35:
                     raise TimeoutError("35-second playback deadline exceeded")
-                if not selector.select(0.25):
+                try:
+                    received, data = events.get(timeout=0.25)
+                except queue.Empty:
                     continue
-                data = process.stdout.read1(4096)
-                if not data:
+                if data is None:
                     break
+                if isinstance(data, Exception):
+                    raise RuntimeError("FFmpeg progress pipe reader failed") from data
                 pending += data
                 while b"\n" in pending:
                     line, pending = pending.split(b"\n", 1)
@@ -72,7 +103,7 @@ def pace(args):
                     if key == "progress" and fields.get("out_time_us", "N/A") != "N/A":
                         points.append(
                             (
-                                time.monotonic() - start,
+                                received - start,
                                 int(fields["out_time_us"]) / 1000000,
                             )
                         )
@@ -81,10 +112,14 @@ def pace(args):
                 errors.seek(0)
                 raise RuntimeError(errors.read().decode(errors="replace"))
         finally:
-            selector.close()
+            stop_reader.set()
             if process.poll() is None:
                 process.kill()
-                process.wait()
+                process.wait(timeout=3)
+            reader.join(timeout=3)
+            if reader.is_alive():
+                raise RuntimeError("FFmpeg progress reader did not terminate after process cleanup")
+            process.stdout.close()
     assert points, "missing progress"
     changed = [points[0]]
     for point in points[1:]:
