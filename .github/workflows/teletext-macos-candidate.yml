@@ -1,0 +1,89 @@
+name: Build macOS teletext candidates
+
+# Explicit candidate construction only. No tag, release or container publishing.
+# Both native architectures remain required for Phase 9 acceptance.
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Unpublished candidate version; do not reuse an immutable release'
+        required: true
+        default: '2.0.7-teletext-candidate'
+        type: string
+      homebrew_core_revision:
+        description: 'Exact 40-character Homebrew/core source revision'
+        required: true
+        default: '84c454b4e56ff7f076cabc90ff58e0d0de01fab1'
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  candidate:
+    name: Native ${{ matrix.rid }} candidate
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 120
+    strategy:
+      fail-fast: false
+      max-parallel: 1
+      matrix:
+        include:
+          - rid: osx-x64
+            runner: macos-15-intel
+          - rid: osx-arm64
+            runner: macos-15
+    env:
+      HOMEBREW_NO_AUTO_UPDATE: '1'
+      HOMEBREW_NO_INSTALL_FROM_API: '1'
+    steps:
+      - name: Checkout build and verification inputs
+        uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Select exact dependency recipes on this ephemeral runner
+        env:
+          CORE_REVISION: ${{ inputs.homebrew_core_revision }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          [[ "$CORE_REVISION" =~ ^[0-9a-f]{40}$ ]]
+          brew tap --force homebrew/core
+          core="$(brew --repository homebrew/core)"
+          git -C "$core" fetch --depth=1 origin "$CORE_REVISION"
+          git -C "$core" checkout --detach FETCH_HEAD
+          test "$(git -C "$core" rev-parse HEAD)" = "$CORE_REVISION"
+          brew install pkgconf nasm autoconf automake libtool gettext dylibbundler \
+            cairo librsvg fontconfig freetype harfbuzz fribidi libass zimg svt-av1 \
+            jpeg-xl x264 x265 libvpx opus openssl@3 rav1e dav1d
+          brew upgrade pkgconf nasm autoconf automake libtool gettext dylibbundler \
+            cairo librsvg fontconfig freetype harfbuzz fribidi libass zimg svt-av1 \
+            jpeg-xl x264 x265 libvpx opus openssl@3 rav1e dav1d
+      - name: Check source and process-bound regressions
+        shell: bash
+        run: python3 scripts/test-teletext-tools.py
+      - name: Build, relocate and execute the native candidate
+        env:
+          CANDIDATE_VERSION: ${{ inputs.version }}
+          RID: ${{ matrix.rid }}
+          CORE_REVISION: ${{ inputs.homebrew_core_revision }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          work="$RUNNER_TEMP/teletext-macos-$RID"
+          echo "CANDIDATE_WORK=$work" >> "$GITHUB_ENV"
+          python3 recipes/macos/build.py --rid "$RID" --version "$CANDIDATE_VERSION" \
+            --work "$work" --jobs 3 --homebrew-core-revision "$CORE_REVISION" \
+            2>&1 | tee "$RUNNER_TEMP/teletext-macos-$RID.log"
+      - name: Upload candidate and evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: teletext-candidate-${{ matrix.rid }}
+          path: |
+            ${{ env.CANDIDATE_WORK }}/ersatzrs-ffmpeg-*.tar.gz*
+            ${{ env.CANDIDATE_WORK }}/ersatzrs-ffmpeg-*/build-info/
+            ${{ runner.temp }}/teletext-macos-${{ matrix.rid }}.log
+          if-no-files-found: warn

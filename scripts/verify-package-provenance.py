@@ -10,6 +10,7 @@ import hashlib
 import io
 import json
 import os
+import platform
 from pathlib import Path, PurePosixPath
 import re
 import shutil
@@ -237,7 +238,9 @@ def verify_runtime(root):
         red_offset = (12 * 64 + 12) * 4
         require(tuple(pixels[red_offset:red_offset + 4]) == (255, 0, 0, 255), "drawvg red square did not render")
         require(tuple(pixels[:4]) == (0, 0, 0, 255), "drawvg changed the untouched background")
-        font = Path(os.environ["WINDIR"]) / "Fonts/arial.ttf" if os.name == "nt" else Path("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf")
+        font = (Path(os.environ["WINDIR"]) / "Fonts/arial.ttf" if os.name == "nt" else
+                Path("/System/Library/Fonts/Supplemental/Arial.ttf") if platform.system() == "Darwin" else
+                Path("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf"))
         shutil.copyfile(font, work / "font.ttf")
         (work / "text.txt").write_text("ErsatzRS", encoding="utf-8")
         pixels = render(["-f", "lavfi", "-i", "color=c=black:s=256x64:d=0.1",

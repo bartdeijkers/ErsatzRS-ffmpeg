@@ -4,6 +4,22 @@ All notable changes are documented here using Keep a Changelog categories.
 
 ## [Unreleased]
 
+### Added
+
+- Verify exact teletext page selection, caption text/timing and colour bitmap
+  decoding with an original redistributable fixture and bounded processes.
+  Existing-package gates now include this proof without rebuilding binaries.
+- Stage and validate exact libzvbi source, copyright/license notices and recipe
+  checksums separately from compiler/linkage provenance.
+- Prepare manually dispatched native macOS x64/ARM64 candidate builds with
+  bundled libraries, recorded dependencies and relocated decoded-output gates.
+  Native execution and Phase 9 package acceptance remain pending.
+
+### Changed
+
+- Make software runtime font selection and pacing evidence identify macOS
+  correctly while preserving Linux and Windows checks.
+
 ## [2.0.6] - 2026-10-07
 
 ### Fixed

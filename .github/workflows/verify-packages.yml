@@ -78,7 +78,9 @@ jobs:
           # Install test tooling only in the disposable AMD64 baseline container;
           # ARM images already contain Python and DejaVu. Package mounts are read-only.
           setup=''
+          execution_kind=emulated
           if [ "$RID" = linux-x64 ]; then
+            execution_kind=direct
             setup='apt-get update -qq && apt-get install -yqq --no-install-recommends python3 fonts-dejavu-core >/dev/null &&'
           fi
           docker run --rm --platform "$PLATFORM" \
@@ -87,6 +89,7 @@ jobs:
             "$setup python3 /checks/verify-package-provenance.py runtime /pkg && \
             python3 /checks/verify-svg.py /pkg/ffmpeg && \
             python3 /checks/verify-webp.py /pkg/ffmpeg && \
+            python3 /checks/verify-teletext.py /pkg/ffmpeg --execution-kind $execution_kind && \
             python3 /checks/verify-sparse-playback.py /pkg/ffmpeg" \
             > "$VERIFY_WORK/runtime.log" 2>&1
           cat "$VERIFY_WORK/runtime.log"
@@ -158,6 +161,8 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw 'Decoded SVG verification failed' }
           python scripts/verify-webp.py $tool | Tee-Object -FilePath $log -Append
           if ($LASTEXITCODE -ne 0) { throw 'Animated WebP verification failed' }
+          python scripts/verify-teletext.py $tool | Tee-Object -FilePath $log -Append
+          if ($LASTEXITCODE -ne 0) { throw 'Teletext page/caption decoding verification failed' }
           python scripts/verify-sparse-playback.py $tool | Tee-Object -FilePath $log -Append
           if ($LASTEXITCODE -ne 0) { throw 'Sparse subtitles, pacing and selected audio verification failed' }
       - name: Upload verification evidence

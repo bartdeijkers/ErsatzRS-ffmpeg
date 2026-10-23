@@ -49,3 +49,12 @@ prefix to prove preservation of complete ICC/EXIF and cleanup of short reads.
 Clean Bookworm and native Windows execution cover graphics, animation, sparse
 subtitles and alternate audio. ARM emulation establishes software execution;
 Intel QSV, AMD AMF and native Linux NVIDIA interop remain explicitly unverified.
+
+## Phase 9 teletext runtime work
+
+[Teletext package checks](scripts/TELETEXT.md) cover exact-page functional
+decoding and source/license inventories. The four v2.0.6 packages retain their
+immutable bytes; adding a notice inventory requires a new unpublished candidate.
+[Native macOS candidates](recipes/macos/README.md) prepare the two missing RIDs
+through a manual build-only workflow. Their native software, dependency/license
+and installed-application acceptance remain open; no new release is implied.

@@ -2,11 +2,11 @@
 """Verify bounded pacing, sparse PGS rendering and alternate audio.
 
 Usage: python3 scripts/verify-sparse-playback.py /path/to/ffmpeg[.exe]
-The sibling ffprobe is required. Runs natively on Windows and Linux, or with
+The sibling ffprobe is required. Runs natively on Windows, Linux and macOS, or with
 Windows executables through WSL interop. All paths belong to a disposable
 synthetic fixture. No user media is accessed.
 """
-import json, os, pathlib, queue, struct, subprocess, tempfile, threading, time, sys
+import json, os, pathlib, platform, queue, struct, subprocess, tempfile, threading, time, sys
 
 workspace = tempfile.TemporaryDirectory(prefix="ersatzrs-readrate-")
 root = pathlib.Path(workspace.name)
@@ -315,7 +315,7 @@ run(
 print(
     json.dumps(
         {
-            "platform": "windows" if windows else "linux",
+            "platform": "windows" if windows else platform.system().lower(),
             "elapsed_seconds": round(elapsed, 3),
             "frames": 400,
             "duration": info["format"]["duration"],
