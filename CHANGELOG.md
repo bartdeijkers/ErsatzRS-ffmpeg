@@ -20,6 +20,13 @@ All notable changes are documented here using Keep a Changelog categories.
 - Make software runtime font selection and pacing evidence identify macOS
   correctly while preserving Linux and Windows checks.
 
+### Fixed
+
+- Backport FFmpeg's decoder-output throttling revert to prevent native teletext
+  subtitle consumers from stopping with buffered audio/video. The exact Linux
+  candidate passes ordinary Off/Burn delivery and Bookworm package checks;
+  other-platform qualification and managed adoption remain separate.
+
 ## [2.0.6] - 2026-10-07
 
 ### Fixed
