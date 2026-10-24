@@ -173,8 +173,15 @@ def build(args):
              "--enable-libzvbi", "--enable-libsvtav1", "--enable-libjxl", "--enable-libx264",
              "--enable-libx265", "--enable-libvpx", "--enable-libopus", "--enable-openssl",
              "--enable-librav1e", "--enable-libdav1d", "--enable-videotoolbox", "--enable-audiotoolbox"]
-    run(["./configure", f"--prefix={prefix}", f"--arch={architecture}", "--target-os=darwin", *flags],
-        ffmpeg, env=environment)
+    try:
+        run(["./configure", f"--prefix={prefix}", f"--arch={architecture}", "--target-os=darwin", *flags],
+            ffmpeg, env=environment)
+    except subprocess.CalledProcessError:
+        # Configure reports probe details only in this file, not its stderr.
+        diagnostic = ffmpeg / "ffbuild/config.log"
+        if diagnostic.is_file():
+            sys.stderr.write(diagnostic.read_text(errors="replace")[-16000:])
+        raise
     run(["make", f"-j{args.jobs}", "ffmpeg", "ffprobe"], ffmpeg, env=environment)
     package.mkdir()
     for tool in ("ffmpeg", "ffprobe"):

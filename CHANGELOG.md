@@ -28,7 +28,8 @@ All notable changes are documented here using Keep a Changelog categories.
 ### Fixed
 
 - Discover the complete macOS runtime dependency union with the pinned
-  Homebrew command, and retain captured command failures in candidate logs.
+  Homebrew command, and retain captured command failures and FFmpeg configure
+  probe diagnostics in candidate logs.
 
 - Allow the Intel macOS candidate's LLVM/Rust dependency build to finish within
   a six-hour bound, and retry one failed architecture without rebuilding the

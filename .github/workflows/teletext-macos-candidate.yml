@@ -133,5 +133,6 @@ jobs:
           path: |
             ${{ env.CANDIDATE_WORK }}/ersatzrs-ffmpeg-*.tar.gz*
             ${{ env.CANDIDATE_WORK }}/ersatzrs-ffmpeg-*/build-info/
+            ${{ env.CANDIDATE_WORK }}/ffmpeg-source/ffbuild/config.log
             ${{ runner.temp }}/teletext-macos-${{ matrix.rid }}.log
           if-no-files-found: warn
