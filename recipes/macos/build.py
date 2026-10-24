@@ -131,6 +131,42 @@ def ca_certificate_notices(record, keg, destination):
     return notices
 
 
+def collect_dependency_notices(inventory, notices):
+    notices.mkdir(parents=True)
+    missing = []
+    for record in inventory:
+        keg = record.pop("keg")
+        dest = notices / record["name"]
+        dest.mkdir()
+        formula_file = keg / ".brew" / (record["name"] + ".rb")
+        require(formula_file.is_file(), "installed dependency formula is missing")
+        shutil.copy2(formula_file, dest / "formula.rb")
+        record["formula_sha256"] = sha256(dest / "formula.rb")
+        files = {}
+        candidates = []
+        for path in keg.rglob("*"):
+            relative = path.relative_to(keg)
+            notice = re.search(r"^(COPYING|LICENSE|LICENCE|COPYRIGHT)", path.name, re.IGNORECASE)
+            notice = notice or any(part.upper() in {"LICENSES", "LICENCES"} for part in relative.parts[:-1])
+            if not notice or path.is_dir():
+                continue
+            candidates.append(relative.as_posix())
+            if not path.is_file():
+                continue
+            require(path.resolve().is_relative_to(keg.resolve()), "license symlink escapes pinned dependency")
+            output = dest / relative
+            output.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(path, output)
+            files[relative.as_posix()] = sha256(output)
+        if record["name"] == "ca-certificates":
+            files.update(ca_certificate_notices(record, keg, dest))
+        if not files:
+            missing.append(f'{record["name"]} (candidates: {", ".join(candidates) or "none"})')
+        record["notice_files"] = files
+    require(not missing, "license notices missing for " + "; ".join(missing))
+    (notices / "dependencies.json").write_text(json.dumps(inventory, indent=2, sort_keys=True) + "\n")
+
+
 def build(args):
     require(platform.system() == "Darwin", "this recipe requires a native macOS runner")
     architecture = {"osx-x64": "x86_64", "osx-arm64": "arm64"}[args.rid]
@@ -200,6 +236,9 @@ def build(args):
     environment.pop("SDKROOT", None)
     environment.pop("CPATH", None)
     environment.pop("LIBRARY_PATH", None)
+    # Establish the complete notice inventory before spending time compiling.
+    notices = args.work / "homebrew-notices"
+    collect_dependency_notices(inventory, notices)
     zvbi = args.work / "zvbi"
     checkout("https://github.com/zapping-vbi/zvbi", ZVBI_REVISION, zvbi)
     run(["./autogen.sh"], zvbi, env=environment)
@@ -248,29 +287,7 @@ def build(args):
     for library in (package / "lib").glob("*.dylib"):
         require(len(library_owners.get(library.name, set())) == 1,
                 "bundled library has a missing or ambiguous dependency origin")
-    notices = package / "build-info/homebrew"
-    notices.mkdir(parents=True)
-    for record in inventory:
-        keg = record.pop("keg")
-        dest = notices / record["name"]
-        dest.mkdir()
-        formula_file = keg / ".brew" / (record["name"] + ".rb")
-        require(formula_file.is_file(), "installed dependency formula is missing")
-        shutil.copy2(formula_file, dest / "formula.rb")
-        record["formula_sha256"] = sha256(dest / "formula.rb")
-        files = {}
-        for path in keg.rglob("*"):
-            if path.is_file() and not path.is_symlink() and re.search(r"^(COPYING|LICENSE|LICENCE|COPYRIGHT)", path.name, re.IGNORECASE):
-                relative = path.relative_to(keg)
-                output = dest / relative
-                output.parent.mkdir(parents=True, exist_ok=True)
-                shutil.copy2(path, output)
-                files[relative.as_posix()] = sha256(output)
-        if record["name"] == "ca-certificates":
-            files.update(ca_certificate_notices(record, keg, dest))
-        require(files, f'license notices missing for {record["name"]}')
-        record["notice_files"] = files
-    (notices / "dependencies.json").write_text(json.dumps(inventory, indent=2, sort_keys=True) + "\n")
+    shutil.copytree(notices, package / "build-info/homebrew")
     tools = json.loads(run([brew, "info", "--json=v2", *TOOLS], capture=True))
     tool_versions = {f["name"]: [i["version"] for i in f["installed"]] for f in tools["formulae"]}
     (notices / "build-tools.json").write_text(json.dumps(tool_versions, indent=2, sort_keys=True) + "\n")

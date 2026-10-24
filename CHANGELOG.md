@@ -29,6 +29,8 @@ All notable changes are documented here using Keep a Changelog categories.
 
 - Retain the exact public Mozilla CA source and checked MPL 2.0 text when
   Homebrew supplies no standalone notice, preserving the package notice gate.
+  Recognize SPDX notice directories and dependency-owned links, and report all
+  missing notices before compilation.
 
 - Discover the complete macOS runtime dependency union with the pinned
   Homebrew command, including explicit compression/XML/protocol metadata

@@ -145,6 +145,47 @@ class MacBundleRules(unittest.TestCase):
         for name in ("ffmpeg", "ffprobe", "lib/test.dylib"):
             (self.package / name).write_bytes(b"synthetic Mach-O test double")
 
+    def notice_record(self, name):
+        keg = self.package / name
+        (keg / ".brew").mkdir(parents=True)
+        (keg / ".brew" / f"{name}.rb").write_text("synthetic pinned formula")
+        return {"name": name, "keg": keg, "license": "LGPL-2.1-or-later"}
+
+    def test_spdx_legacy_and_owned_symlink_notices_are_preserved(self):
+        record = self.notice_record("glib")
+        keg = record["keg"]
+        (keg / "LICENSES").mkdir()
+        text = b"synthetic complete source notice"
+        (keg / "LICENSES/LGPL-2.1-or-later.txt").write_bytes(text)
+        (keg / "COPYING").symlink_to("LICENSES/LGPL-2.1-or-later.txt")
+        (keg / "COPYRIGHT").write_bytes(b"synthetic attribution")
+        output = self.package / "notices"
+        self.mac.collect_dependency_notices([record], output)
+        self.assertEqual(set(record["notice_files"]),
+                         {"COPYING", "COPYRIGHT", "LICENSES/LGPL-2.1-or-later.txt"})
+        self.assertEqual((output / "glib/COPYING").read_bytes(), text)
+        self.assertFalse((output / "glib/COPYING").is_symlink())
+        for name, digest in record["notice_files"].items():
+            self.assertEqual(self.mac.sha256(output / "glib" / name), digest)
+
+    def test_notice_symlink_cannot_read_outside_its_dependency(self):
+        record = self.notice_record("glib")
+        outside = self.package / "outside-notice"
+        outside.write_bytes(b"outside the selected dependency")
+        (record["keg"] / "COPYING").symlink_to(outside)
+        with self.assertRaisesRegex(ValueError, "escapes pinned dependency"):
+            self.mac.collect_dependency_notices([record], self.package / "notices")
+        self.assertFalse((self.package / "notices/glib/COPYING").exists())
+
+    def test_all_missing_notices_fail_together_before_inventory_acceptance(self):
+        records = [self.notice_record(name) for name in ("first", "second")]
+        output = self.package / "notices"
+        with self.assertRaises(ValueError) as error:
+            self.mac.collect_dependency_notices(records, output)
+        self.assertIn("first", str(error.exception))
+        self.assertIn("second", str(error.exception))
+        self.assertFalse((output / "dependencies.json").exists())
+
     def run_rule(self, dependencies, architecture="arm64"):
         def command(arguments, **kwargs):
             if arguments[0] == "lipo":
