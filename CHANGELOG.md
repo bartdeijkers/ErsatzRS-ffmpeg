@@ -17,10 +17,18 @@ All notable changes are documented here using Keep a Changelog categories.
 
 ### Changed
 
+- Prepare v2.0.7 with monotonic subtitle heartbeats, caption-preserving
+  VideoToolbox output and the Linux ARM64 RKMPP/RGA pipeline. Four local
+  software/package checks pass; macOS and application integration remain open,
+  with approved hardware checks explicitly unverified.
+
 - Make software runtime font selection and pacing evidence identify macOS
   correctly while preserving Linux and Windows checks.
 
 ### Fixed
+
+- Select the exact pinned Homebrew recipes on hosted macOS images that carry
+  local formula overrides, allowing candidate builds to reach compilation.
 
 - Backport FFmpeg's decoder-output throttling revert to prevent native teletext
   subtitle consumers from stopping with buffered audio/video. The exact Linux

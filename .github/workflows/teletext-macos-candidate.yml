@@ -53,7 +53,9 @@ jobs:
           brew tap --force homebrew/core
           core="$(brew --repository homebrew/core)"
           git -C "$core" fetch --depth=1 origin "$CORE_REVISION"
-          git -C "$core" checkout --detach FETCH_HEAD
+          # Hosted images may carry formula overrides; this ephemeral tap must
+          # match the reviewed revision rather than the runner image's edits.
+          git -C "$core" checkout --detach --force FETCH_HEAD
           test "$(git -C "$core" rev-parse HEAD)" = "$CORE_REVISION"
           brew install pkgconf nasm autoconf automake libtool gettext dylibbundler \
             cairo librsvg fontconfig freetype harfbuzz fribidi libass zimg svt-av1 \
