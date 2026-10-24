@@ -21,7 +21,7 @@ FFMPEG_REVISION = "d32b387f2b0a484599d4587d651891f0c63c4238"
 ZVBI_REVISION = "d3a5ee9f2b047bf16cd1ee5ccf6ec05ee75409d0"
 DEPENDENCIES = ("cairo", "librsvg", "fontconfig", "freetype", "harfbuzz", "fribidi",
                 "libass", "zimg", "svt-av1", "jpeg-xl", "x264", "x265", "libvpx",
-                "opus", "openssl@3", "rav1e", "dav1d", "zlib", "bzip2", "expat", "xorgproto", "libffi")
+                "opus", "openssl@3", "rav1e", "dav1d", "zlib", "bzip2", "expat", "xorgproto", "libffi", "libxml2")
 TOOLS = ("pkgconf", "nasm", "autoconf", "automake", "libtool", "gettext", "dylibbundler")
 # The modules required by the selected pinned FFmpeg configure flags.
 PKGCONFIG_MODULES = ("cairo", "librsvg-2.0", "fontconfig", "freetype2", "harfbuzz",
