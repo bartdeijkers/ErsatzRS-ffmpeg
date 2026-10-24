@@ -101,10 +101,10 @@ jobs:
           test "$(git -C "$cask" rev-parse HEAD)" = "$CASK_REVISION"
           brew install pkgconf nasm autoconf automake libtool gettext dylibbundler \
             cairo librsvg fontconfig freetype harfbuzz fribidi libass zimg svt-av1 \
-            jpeg-xl x264 x265 libvpx opus openssl@3 rav1e dav1d
+            jpeg-xl x264 x265 libvpx opus openssl@3 rav1e dav1d zlib bzip2 expat xorgproto
           brew upgrade pkgconf nasm autoconf automake libtool gettext dylibbundler \
             cairo librsvg fontconfig freetype harfbuzz fribidi libass zimg svt-av1 \
-            jpeg-xl x264 x265 libvpx opus openssl@3 rav1e dav1d
+            jpeg-xl x264 x265 libvpx opus openssl@3 rav1e dav1d zlib bzip2 expat xorgproto
       - name: Check source and process-bound regressions
         shell: bash
         run: python3 scripts/test-teletext-tools.py
