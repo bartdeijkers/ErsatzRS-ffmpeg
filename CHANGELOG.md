@@ -31,7 +31,8 @@ All notable changes are documented here using Keep a Changelog categories.
   Homebrew command, including explicit compression/XML/protocol metadata
   providers, recorded library/share pkg-config directories and owned metadata
   for the verified macOS bzip2 archive. Check all selected metadata together
-  before compilation. Retain command
+  before compilation, expose the recorded librsvg header root and avoid
+  unrelated hosted-tool upgrades. Retain command
   failures and FFmpeg configure probe diagnostics in candidate logs.
 
 - Allow the Intel macOS candidate's LLVM/Rust dependency build to finish within

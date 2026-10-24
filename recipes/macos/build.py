@@ -169,6 +169,11 @@ def build(args):
     environment["PKG_CONFIG_PATH"] = os.pathsep.join(map(str, pkg_config))
     environment["PKG_CONFIG_LIBDIR"] = environment["PKG_CONFIG_PATH"]
     environment["MACOSX_DEPLOYMENT_TARGET"] = args.deployment_target
+    # FFmpeg's version-prefixed librsvg include also needs the recorded root.
+    rsvg_keg = next(item["keg"] for item in inventory if item["name"] == "librsvg")
+    require((rsvg_keg / "include/librsvg-2.0/librsvg/rsvg.h").is_file(),
+            "pinned librsvg public header is missing")
+    environment["CPPFLAGS"] = f"-I{rsvg_keg / 'include'}"
     # Do not inherit arbitrary user flags or unrecorded library search paths.
     environment.pop("CFLAGS", None)
     environment.pop("CXXFLAGS", None)
@@ -271,6 +276,8 @@ def build(args):
     record = {"schema_version": 1, "rid": args.rid, "candidate_version": args.version,
               "ffmpeg_commit": FFMPEG_REVISION, "zvbi_commit": ZVBI_REVISION,
               "configure_flags": flags, "deployment_target": args.deployment_target,
+              "cppflags": environment["CPPFLAGS"],
+              "skip_unrelated_homebrew_dependents": os.environ.get("HOMEBREW_NO_INSTALLED_DEPENDENTS_CHECK") == "1",
               "generated_pkgconfig_sha256": {name: sha256(path) for name, path in generated_metadata.items()},
               "macos_version": platform.mac_ver()[0], "xcode": run(["xcodebuild", "-version"], capture=True).strip(),
               "patches": {p.name: sha256(p) for p in patches}, "mach_o_sha256": identities,
