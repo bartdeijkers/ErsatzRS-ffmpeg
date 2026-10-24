@@ -27,6 +27,10 @@ All notable changes are documented here using Keep a Changelog categories.
 
 ### Fixed
 
+- Allow the Intel macOS candidate's LLVM/Rust dependency build to finish within
+  a six-hour bound, and retry one failed architecture without rebuilding the
+  other candidate. ARM64 retains its existing two-hour limit and all gates.
+
 - Select the exact pinned Homebrew recipes on hosted macOS images that carry
   local formula overrides, allowing candidate builds to reach compilation.
 - Pin compatible Cask migration data alongside core to prevent older hosted

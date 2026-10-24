@@ -4,6 +4,12 @@ This recipe prepares the two missing Phase 9 runtime candidates. It has not yet
 been executed on macOS. The manual `teletext-macos-candidate.yml` workflow builds
 `osx-x64` on `macos-15-intel` and `osx-arm64` on `macos-15`; it has read-only
 repository permissions and uploads artifacts without publishing a release.
+The default matrix builds both architectures. A targeted `rid` input retries
+only a failed architecture while retaining the other's evidence. Intel receives
+a six-hour job bound because the pinned recipes have no Intel bottles for the
+librsvg LLVM/Rust dependency chain; the two-hour limit expired during LLVM
+compilation. ARM64 retains its two-hour bound. Source and acceptance checks are
+unchanged.
 
 Use an ephemeral native runner. Dependency provisioning deliberately changes
 that runner's Homebrew checkout and installed formulae. It is not a maintenance

@@ -10,6 +10,15 @@ on:
         required: true
         default: '2.0.7-teletext-candidate'
         type: string
+      rid:
+        description: 'Build both required candidates, or retry one failed architecture'
+        required: true
+        default: 'all'
+        type: choice
+        options:
+          - all
+          - osx-x64
+          - osx-arm64
       homebrew_core_revision:
         description: 'Exact 40-character Homebrew/core source revision'
         required: true
@@ -33,16 +42,21 @@ jobs:
   candidate:
     name: Native ${{ matrix.rid }} candidate
     runs-on: ${{ matrix.runner }}
-    timeout-minutes: 120
+    # Intel has no current Homebrew bottles and must compile the LLVM/Rust
+    # dependency chain. Keep the shorter bound for the bottled ARM64 path.
+    timeout-minutes: ${{ matrix.rid == 'osx-x64' && 360 || 120 }}
     strategy:
       fail-fast: false
       max-parallel: 1
       matrix:
-        include:
-          - rid: osx-x64
-            runner: macos-15-intel
-          - rid: osx-arm64
-            runner: macos-15
+        # A targeted retry reuses the other architecture's valid evidence;
+        # the default matrix still requires both native candidates.
+        include: >-
+          ${{ fromJSON(
+            inputs.rid == 'osx-x64' && '[{"rid":"osx-x64","runner":"macos-15-intel"}]' ||
+            inputs.rid == 'osx-arm64' && '[{"rid":"osx-arm64","runner":"macos-15"}]' ||
+            '[{"rid":"osx-x64","runner":"macos-15-intel"},{"rid":"osx-arm64","runner":"macos-15"}]'
+          ) }}
     env:
       HOMEBREW_NO_AUTO_UPDATE: '1'
       HOMEBREW_NO_INSTALL_FROM_API: '1'
