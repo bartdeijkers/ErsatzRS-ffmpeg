@@ -21,8 +21,12 @@ FFMPEG_REVISION = "d32b387f2b0a484599d4587d651891f0c63c4238"
 ZVBI_REVISION = "d3a5ee9f2b047bf16cd1ee5ccf6ec05ee75409d0"
 DEPENDENCIES = ("cairo", "librsvg", "fontconfig", "freetype", "harfbuzz", "fribidi",
                 "libass", "zimg", "svt-av1", "jpeg-xl", "x264", "x265", "libvpx",
-                "opus", "openssl@3", "rav1e", "dav1d", "zlib", "bzip2", "expat", "xorgproto")
+                "opus", "openssl@3", "rav1e", "dav1d", "zlib", "bzip2", "expat", "xorgproto", "libffi")
 TOOLS = ("pkgconf", "nasm", "autoconf", "automake", "libtool", "gettext", "dylibbundler")
+# The modules required by the selected pinned FFmpeg configure flags.
+PKGCONFIG_MODULES = ("cairo", "librsvg-2.0", "fontconfig", "freetype2", "harfbuzz",
+                     "fribidi", "libass", "zimg", "zvbi-0.2", "SvtAv1Enc", "libjxl",
+                     "libjxl_threads", "x264", "x265", "vpx", "opus", "openssl", "rav1e", "dav1d")
 
 
 def require(condition, message):
@@ -181,6 +185,8 @@ def build(args):
     run(["make", "-C", "src", f"-j{args.jobs}"], zvbi, env=environment)
     run(["make", "-C", "src", "install"], zvbi, env=environment)
     run(["make", "SUBDIRS=.", "install"], zvbi, env=environment)
+    # Report the complete metadata gap together, before the longer compile.
+    run(["pkg-config", "--exists", "--print-errors", *PKGCONFIG_MODULES], env=environment)
     ffmpeg = args.work / "ffmpeg-source"
     checkout("https://github.com/FFmpeg/FFmpeg.git", FFMPEG_REVISION, ffmpeg)
     patches = sorted((ROOT / "images/ffmpeg-builds/patches/common").glob("*.patch"))
