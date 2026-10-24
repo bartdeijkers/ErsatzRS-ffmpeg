@@ -19,6 +19,8 @@ import sys
 ROOT = Path(__file__).resolve().parents[2]
 FFMPEG_REVISION = "d32b387f2b0a484599d4587d651891f0c63c4238"
 ZVBI_REVISION = "d3a5ee9f2b047bf16cd1ee5ccf6ec05ee75409d0"
+MPL2_LICENSE_URL = "https://www.mozilla.org/media/MPL/2.0/index.txt"
+MPL2_LICENSE_SHA256 = "3f3d9e0024b1921b067d6f7f88deb4a60cbe7a78e76c64e3f1d7fc3b779b9d04"
 DEPENDENCIES = ("cairo", "librsvg", "fontconfig", "freetype", "harfbuzz", "fribidi",
                 "libass", "zimg", "svt-av1", "jpeg-xl", "x264", "x265", "libvpx",
                 "opus", "openssl@3", "rav1e", "dav1d", "zlib", "bzip2", "expat", "xorgproto", "libffi", "libxml2")
@@ -110,6 +112,23 @@ Libs: -L${{libdir}} -lbz2
 Cflags: -I${{includedir}}
 """)
     return metadata
+
+
+def ca_certificate_notices(record, keg, destination):
+    # Use the original public source, never the post-install system/keychain merge.
+    original = keg / "share/ca-certificates/cacert.pem"
+    require(record["license"] == "MPL-2.0", "CA source license differs from the reviewed notice")
+    require(original.is_file() and not original.is_symlink()
+            and sha256(original) == record["source"]["checksum"],
+            "original public CA source differs from the pinned checksum")
+    license_text = ROOT / "recipes/macos/licenses/MPL-2.0.txt"
+    require(sha256(license_text) == MPL2_LICENSE_SHA256, "MPL license text checksum differs")
+    notices = {}
+    for name, source in (("cacert.pem", original), ("LICENSE-MPL-2.0.txt", license_text)):
+        shutil.copy2(source, destination / name)
+        notices[name] = sha256(destination / name)
+    record["license_text_source"] = {"url": MPL2_LICENSE_URL, "sha256": MPL2_LICENSE_SHA256}
+    return notices
 
 
 def build(args):
@@ -247,6 +266,8 @@ def build(args):
                 output.parent.mkdir(parents=True, exist_ok=True)
                 shutil.copy2(path, output)
                 files[relative.as_posix()] = sha256(output)
+        if record["name"] == "ca-certificates":
+            files.update(ca_certificate_notices(record, keg, dest))
         require(files, f'license notices missing for {record["name"]}')
         record["notice_files"] = files
     (notices / "dependencies.json").write_text(json.dumps(inventory, indent=2, sort_keys=True) + "\n")
