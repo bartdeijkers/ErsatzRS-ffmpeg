@@ -8,7 +8,10 @@ repository permissions and uploads artifacts without publishing a release.
 Use an ephemeral native runner. Dependency provisioning deliberately changes
 that runner's Homebrew checkout and installed formulae. It is not a maintenance
 command for a personal Mac. The workflow pins Homebrew/core to an explicit Git
-revision and disables automatic update/API formula replacement. Installed
+revision and pins the compatible Homebrew tool independently, disabling automatic
+update/API formula replacement. The reviewed recipes use Homebrew 7's
+`resource ..., :test` syntax; hosted Homebrew 6 images cannot load them. Both
+checkout identities are checked before building and recorded in source provenance. Installed
 versions must match those recipes; unexpected dependencies or missing notices
 fail candidate construction. Both native architectures remain required.
 
@@ -50,7 +53,8 @@ Example on a provisioned ephemeral runner:
 ```sh
 python3 recipes/macos/build.py --rid osx-arm64 \
   --version 2.0.7-teletext-candidate --work "$RUNNER_TEMP/teletext-macos-osx-arm64" \
-  --jobs 3 --homebrew-core-revision <exact-40-character-revision>
+  --jobs 3 --homebrew-core-revision <exact-40-character-core-revision> \
+  --homebrew-brew-revision <exact-40-character-brew-revision>
 ```
 
 Do not modify v2.0.6 assets or change ErsatzRS's managed pin before exact candidate

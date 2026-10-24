@@ -15,6 +15,11 @@ on:
         required: true
         default: '84c454b4e56ff7f076cabc90ff58e0d0de01fab1'
         type: string
+      homebrew_brew_revision:
+        description: 'Exact compatible 40-character Homebrew/brew source revision'
+        required: true
+        default: '8f10429b56be28a25032b87463fffc95e556b5bc'
+        type: string
 
 permissions:
   contents: read
@@ -46,10 +51,19 @@ jobs:
       - name: Select exact dependency recipes on this ephemeral runner
         env:
           CORE_REVISION: ${{ inputs.homebrew_core_revision }}
+          BREW_REVISION: ${{ inputs.homebrew_brew_revision }}
         shell: bash
         run: |
           set -euo pipefail
           [[ "$CORE_REVISION" =~ ^[0-9a-f]{40}$ ]]
+          [[ "$BREW_REVISION" =~ ^[0-9a-f]{40}$ ]]
+          # The pinned recipes use the Homebrew 7 test-resource DSL, while
+          # hosted images can still ship Homebrew 6. Pin the compatible tool too.
+          brew_repository="$(brew --repository)"
+          git -C "$brew_repository" fetch --depth=1 origin "$BREW_REVISION"
+          git -C "$brew_repository" checkout --detach --force FETCH_HEAD
+          test "$(git -C "$brew_repository" rev-parse HEAD)" = "$BREW_REVISION"
+          brew --version
           brew tap --force homebrew/core
           core="$(brew --repository homebrew/core)"
           git -C "$core" fetch --depth=1 origin "$CORE_REVISION"
@@ -71,6 +85,7 @@ jobs:
           CANDIDATE_VERSION: ${{ inputs.version }}
           RID: ${{ matrix.rid }}
           CORE_REVISION: ${{ inputs.homebrew_core_revision }}
+          BREW_REVISION: ${{ inputs.homebrew_brew_revision }}
         shell: bash
         run: |
           set -euo pipefail
@@ -78,6 +93,7 @@ jobs:
           echo "CANDIDATE_WORK=$work" >> "$GITHUB_ENV"
           python3 recipes/macos/build.py --rid "$RID" --version "$CANDIDATE_VERSION" \
             --work "$work" --jobs 3 --homebrew-core-revision "$CORE_REVISION" \
+            --homebrew-brew-revision "$BREW_REVISION" \
             2>&1 | tee "$RUNNER_TEMP/teletext-macos-$RID.log"
       - name: Upload candidate and evidence
         if: always()

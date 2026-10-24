@@ -90,6 +90,7 @@ def build(args):
     require(platform.machine() == architecture, "native runner architecture does not match RID")
     require(re.fullmatch(r"[0-9]+\.[0-9]+\.[0-9]+(?:-[A-Za-z0-9.-]+)?", args.version), "invalid package version")
     require(re.fullmatch(r"[0-9a-f]{40}", args.homebrew_core_revision), "invalid Homebrew core revision")
+    require(re.fullmatch(r"[0-9a-f]{40}", args.homebrew_brew_revision), "invalid Homebrew tool revision")
     require(re.fullmatch(r"[0-9]+\.[0-9]+", args.deployment_target), "invalid deployment target")
     require(1 <= args.jobs <= 8, "build concurrency must be between one and eight")
     require(not args.work.exists(), "build directory already exists")
@@ -98,6 +99,9 @@ def build(args):
     package = args.work / f"ersatzrs-ffmpeg-{args.version}-{args.rid}"
     brew = shutil.which("brew")
     require(brew, "Homebrew is required on the build runner")
+    brew_repository = run([brew, "--repository"], capture=True).strip()
+    require(run(["git", "-C", brew_repository, "rev-parse", "HEAD"], capture=True).strip() == args.homebrew_brew_revision,
+            "Homebrew tool checkout differs from selected revision")
     core = run([brew, "--repository", "homebrew/core"], capture=True).strip()
     require(run(["git", "-C", core, "rev-parse", "HEAD"], capture=True).strip() == args.homebrew_core_revision,
             "Homebrew core checkout differs from selected dependency recipes")
@@ -221,6 +225,7 @@ def build(args):
               "macos_version": platform.mac_ver()[0], "xcode": run(["xcodebuild", "-version"], capture=True).strip(),
               "patches": {p.name: sha256(p) for p in patches}, "mach_o_sha256": identities,
               "recipe_sha256": sha256(Path(__file__)), "homebrew_core_revision": args.homebrew_core_revision,
+              "homebrew_brew_revision": args.homebrew_brew_revision,
               "library_owners": {p.name: next(iter(library_owners[p.name])) for p in (package / "lib").glob("*.dylib")},
               "acceptance": "candidate recipe; Phase 9 platform acceptance remains separate"}
     (package / "build-info/source.json").write_text(json.dumps(record, indent=2, sort_keys=True) + "\n")
@@ -249,6 +254,7 @@ def main():
     parser.add_argument("--work", type=Path, required=True)
     parser.add_argument("--jobs", type=int, default=3)
     parser.add_argument("--homebrew-core-revision", required=True)
+    parser.add_argument("--homebrew-brew-revision", required=True)
     parser.add_argument("--deployment-target", default="15.0")
     args = parser.parse_args()
     args.work = args.work.resolve()
