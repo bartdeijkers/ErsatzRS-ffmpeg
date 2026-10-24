@@ -6,60 +6,47 @@ All notable changes are documented here using Keep a Changelog categories.
 
 ### Added
 
-- Verify exact teletext page selection, caption text/timing and colour bitmap
-  decoding with an original redistributable fixture and bounded processes.
-  Existing-package gates now include this proof without rebuilding binaries.
-- Stage and validate exact libzvbi source, copyright/license notices and recipe
-  checksums separately from compiler/linkage provenance.
-- Prepare manually dispatched native macOS x64/ARM64 candidate builds with
-  bundled libraries, recorded dependencies and relocated decoded-output gates.
-  macOS builds are now deferred until maintainer resume. Native ARM64
-  construction components pass; complete package/software acceptance and Intel
-  execution remain explicitly unverified.
-
-### Changed
-
-- Prepare v2.0.7 with monotonic subtitle heartbeats, caption-preserving
-  VideoToolbox output and the Linux ARM64 RKMPP/RGA pipeline. Four local
-  software/package checks pass; macOS and application integration remain open,
-  with approved hardware checks explicitly unverified.
-
-- Make software runtime font selection and pacing evidence identify macOS
-  correctly while preserving Linux and Windows checks.
+- Prepare experimental native macOS x64/ARM64 candidates with bundled libraries,
+  pinned dependency/tool identities and relocated decoded-output gates. Builds
+  are deferred until maintainer resume. Native ARM64 construction components
+  pass; complete package/software acceptance and Intel execution are unverified.
 
 ### Fixed
 
-- Match draft package-verification tags to the exact current runtime version,
-  rejecting older candidate namespaces before downloading assets.
+- Make macOS dependency discovery include complete pkg-config providers and
+  recorded header/search roots. Preserve exact CA source/MPL notices, SPDX
+  license directories and dependency-owned links; reject external links and
+  report all missing notices before compilation.
+- Pin compatible Homebrew tool/core/Cask revisions on ephemeral runners,
+  preserve configure diagnostics and avoid unrelated hosted-tool upgrades.
+  Targeted architecture retries retain all gates; Intel source bootstrap has
+  a six-hour bound and ARM64 retains its two-hour bound.
 
-- Retain the exact public Mozilla CA source and checked MPL 2.0 text when
-  Homebrew supplies no standalone notice, preserving the package notice gate.
-  Recognize SPDX notice directories and dependency-owned links, and report all
-  missing notices before compilation.
+## [2.0.7] - 2026-10-24
 
-- Discover the complete macOS runtime dependency union with the pinned
-  Homebrew command, including explicit compression/XML/protocol metadata
-  providers, recorded library/share pkg-config directories and owned metadata
-  for the verified macOS bzip2 archive. Check all selected metadata together
-  before compilation, expose the recorded librsvg header root and avoid
-  unrelated hosted-tool upgrades. Retain command
-  failures and FFmpeg configure probe diagnostics in candidate logs.
+### Added
 
-- Allow the Intel macOS candidate's LLVM/Rust dependency build to finish within
-  a six-hour bound, and retry one failed architecture without rebuilding the
-  other candidate. ARM64 retains its existing two-hour limit and all gates.
+- Add the pinned Linux ARM64 RKMPP/RGA runtime pipeline and dependency/source
+  provenance. Native Rockchip hardware acceptance remains explicitly unverified.
+- Verify exact teletext page selection, caption text/timing and colour bitmap
+  decoding, with exact libzvbi source and copyright/license inventories.
 
-- Select the exact pinned Homebrew recipes on hosted macOS images that carry
-  local formula overrides, allowing candidate builds to reach compilation.
-- Pin compatible Cask migration data alongside core to prevent older hosted
-  Azure CLI migrations from causing recursive dependency resolution.
-- Pin and record the compatible Homebrew tool as well as its recipes, so older
-  hosted tools do not reject the selected dependency-resource syntax.
+### Fixed
 
-- Backport FFmpeg's decoder-output throttling revert to prevent native teletext
-  subtitle consumers from stopping with buffered audio/video. The exact Linux
-  candidate passes ordinary Off/Burn delivery and Bookworm package checks;
-  other-platform qualification and managed adoption remain separate.
+- Keep subtitle heartbeats monotonic during sparse-image-subtitle playback.
+- Revert decoder-output throttling so native teletext consumers continue with
+  buffered audio/video. Available software package checks pass on all four RIDs.
+- Retain the VideoToolbox caption-preservation source correction. macOS package
+  and native VideoToolbox acceptance remain unverified; no macOS kit is shipped.
+- Match verification candidate tags to the exact runtime package version.
+
+### Changed
+
+- Publish the exact verified Linux x64, Linux ARM64, Linux ARMv7 and Windows x64
+  archives with SHA-256 sidecars and a pinned source/payload manifest. All four
+  existing-package CI checks pass without rebuilding the archives. Application
+  adoption and approved hardware acceptance debt remain separate. No Docker
+  image is rebuilt or published by this package release.
 
 ## [2.0.6] - 2026-10-07
 
@@ -154,7 +141,8 @@ All notable changes are documented here using Keep a Changelog categories.
   combined VPP operations. Restore the Windows D3D11 render-target texture and
   pool allocation behaviour required by the upstream QSV pipeline.
 
-[Unreleased]: https://github.com/bartdeijkers/ErsatzRS-ffmpeg/compare/v2.0.6...HEAD
+[Unreleased]: https://github.com/bartdeijkers/ErsatzRS-ffmpeg/compare/v2.0.7...HEAD
+[2.0.7]: https://github.com/bartdeijkers/ErsatzRS-ffmpeg/compare/v2.0.6...v2.0.7
 [2.0.6]: https://github.com/bartdeijkers/ErsatzRS-ffmpeg/compare/v2.0.5...v2.0.6
 [2.0.3]: https://github.com/bartdeijkers/ErsatzRS-ffmpeg/releases/tag/v2.0.3
 [2.0.4]: https://github.com/bartdeijkers/ErsatzRS-ffmpeg/compare/v2.0.3...v2.0.4
