@@ -21,6 +21,26 @@ for pinned dependency inputs, bounded host Docker builds, archive provenance,
 and the required software runtime checks. Native hardware acceptance is tracked
 separately from emulated software execution.
 
+## Unpublished v2.0.7 candidate
+
+The UCU-12 candidate retains the pinned FFmpeg 9.0 source and adds monotonic
+subtitle-heartbeat and VideoToolbox caption corrections. Linux ARM64 alone adds
+the RKMPP/RGA hardware pipeline; the other RIDs keep their pixel-format ABI.
+The ARM64 dependency extension lives in `images/ffmpeg-builds/rockchip/` and
+pins both source revisions and archive checksums. It builds static libraries
+for FFmpeg and a separate shared MPP companion for the private Next package.
+
+The four local package builds and their available software/archive checks pass.
+Native macOS candidate builds and final application integration remain open.
+Rockchip RKMPP/RGA,
+Intel QSV HDR, AMD VAAPI and native macOS VideoToolbox captions remain explicitly
+approved, unverified hardware acceptance debt. Existing v2.0.6 packages retain
+their immutable bytes. No v2.0.7 publication is implied.
+
+Remove each local fix when the selected upstream source supplies equivalent
+behavior and its original regression passes. The unchanged heartbeat and
+VideoToolbox regressions are retained under `scripts/upstream-regressions/`.
+
 ## Version 2.0.6 package verification
 
 Version 2.0.6 rebuilds all four downloadable RIDs with animated WebP loop/seek

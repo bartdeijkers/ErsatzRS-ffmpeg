@@ -3,3 +3,4 @@
 images/** text=auto eol=lf
 images/ffmpeg-builds/patches/*.patch whitespace=-blank-at-eol
 images/ffmpeg-builds/patches/common/*.patch whitespace=-blank-at-eol,-blank-at-eof
+images/ffmpeg-builds/patches/linuxarm64/*.patch whitespace=-blank-at-eol,-blank-at-eof

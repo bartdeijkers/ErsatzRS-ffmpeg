@@ -22,13 +22,16 @@ subprocess.run(
 )
 script = work / "build.sh"
 text = script.read_text()
+configure = "--enable-cairo"
+if target == "linuxarm64":
+    configure += " --enable-rkmpp --enable-rkrga --enable-libdrm --enable-version3"
 replacements = {
     "git clone --filter=blob:none --branch=": "git clone --depth=1 --branch=",
     "    cd ffmpeg\n": (
         "    cd ffmpeg\n"
         f'    test "\\$(git rev-parse HEAD)" = {FFMPEG_REVISION}\n'
     ),
-    "./configure --prefix=": "./configure --enable-cairo --prefix=",
+    "./configure --prefix=": f"./configure {configure} --prefix=",
     "make -j\\$(nproc) V=1": "make -j4 V=1",
     "xz -T0": "xz -T2",
 }
