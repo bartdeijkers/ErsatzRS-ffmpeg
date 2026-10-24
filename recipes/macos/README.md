@@ -1,7 +1,14 @@
 # Native macOS teletext candidates
 
-This recipe prepares the two missing Phase 9 runtime candidates. It has not yet
-been executed on macOS. The manual `teletext-macos-candidate.yml` workflow builds
+macOS builds are deferred by the maintainer until explicit resume. Do not
+dispatch new macOS builds or retries while this instruction remains active.
+Native ARM64 compilation, relocation/signing construction and selected metadata
+checks have passed; complete notices, strict package verification and decoded
+software acceptance have not passed. Intel dependency bootstrap exceeded the
+original two-hour bound and remains unverified. These are component results,
+not complete macOS package or application acceptance.
+
+The manual `teletext-macos-candidate.yml` workflow builds
 `osx-x64` on `macos-15-intel` and `osx-arm64` on `macos-15`; it has read-only
 repository permissions and uploads artifacts without publishing a release.
 The default matrix builds both architectures. A targeted `rid` input retries

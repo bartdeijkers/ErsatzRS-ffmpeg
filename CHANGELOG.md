@@ -13,7 +13,9 @@ All notable changes are documented here using Keep a Changelog categories.
   checksums separately from compiler/linkage provenance.
 - Prepare manually dispatched native macOS x64/ARM64 candidate builds with
   bundled libraries, recorded dependencies and relocated decoded-output gates.
-  Native execution and Phase 9 package acceptance remain pending.
+  macOS builds are now deferred until maintainer resume. Native ARM64
+  construction components pass; complete package/software acceptance and Intel
+  execution remain explicitly unverified.
 
 ### Changed
 
