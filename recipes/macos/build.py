@@ -89,6 +89,25 @@ def verify_bundle(package, architecture):
     return {path.relative_to(package).as_posix(): sha256(path) for path in objects}
 
 
+def bzip2_pkgconfig(directory, keg, version):
+    # Homebrew creates this metadata only on Linux; use its verified Mac keg.
+    require((keg / "lib/libbz2.a").is_file() and (keg / "include/bzlib.h").is_file(),
+            "pinned bzip2 headers or archive are missing")
+    directory.mkdir(parents=True, exist_ok=True)
+    metadata = directory / "bzip2.pc"
+    metadata.write_text(f"""prefix={keg}
+libdir=${{prefix}}/lib
+includedir=${{prefix}}/include
+
+Name: bzip2
+Description: Pinned bzip2 compression library
+Version: {version}
+Libs: -L${{libdir}} -lbz2
+Cflags: -I${{includedir}}
+""")
+    return metadata
+
+
 def build(args):
     require(platform.system() == "Darwin", "this recipe requires a native macOS runner")
     architecture = {"osx-x64": "x86_64", "osx-arm64": "arm64"}[args.rid]
@@ -121,6 +140,7 @@ def build(args):
     inventory = []
     library_owners = {}
     pkg_config = [prefix / "lib/pkgconfig"]
+    generated_metadata = {}
     for formula in info["formulae"]:
         expected = formula["versions"]["stable"]
         expected += f'_{formula["revision"]}' if formula["revision"] else ""
@@ -134,6 +154,9 @@ def build(args):
             if library.is_file():
                 library_owners.setdefault(library.name, set()).add(name)
         pkg_config.extend((keg / "lib/pkgconfig", keg / "share/pkgconfig"))
+        if name == "bzip2" and not (keg / "lib/pkgconfig/bzip2.pc").is_file():
+            metadata = bzip2_pkgconfig(pkg_config[0], keg, formula["versions"]["stable"])
+            generated_metadata[metadata.name] = metadata
         inventory.append({"name": name, "version": installed["version"],
                           "license": formula["license"], "source": formula["urls"]["stable"],
                           "bottle": formula.get("bottle"), "keg": keg})
@@ -226,6 +249,10 @@ def build(args):
     run([sys.executable, ROOT / "scripts/verify-teletext-source.py", package,
          "--expected-revision", ZVBI_REVISION])
     build_info = package / "build-info"
+    for name, metadata in generated_metadata.items():
+        destination = build_info / "pkgconfig" / name
+        destination.parent.mkdir(exist_ok=True)
+        shutil.copy2(metadata, destination)
     shutil.copy2(Path(__file__), build_info / "macos-build.py")
     shutil.copy2(ROOT / "scripts/stage-teletext-source.py", build_info / "stage-teletext-source.py")
     patch_folder = build_info / "ffmpeg-patches"
@@ -238,6 +265,7 @@ def build(args):
     record = {"schema_version": 1, "rid": args.rid, "candidate_version": args.version,
               "ffmpeg_commit": FFMPEG_REVISION, "zvbi_commit": ZVBI_REVISION,
               "configure_flags": flags, "deployment_target": args.deployment_target,
+              "generated_pkgconfig_sha256": {name: sha256(path) for name, path in generated_metadata.items()},
               "macos_version": platform.mac_ver()[0], "xcode": run(["xcodebuild", "-version"], capture=True).strip(),
               "patches": {p.name: sha256(p) for p in patches}, "mach_o_sha256": identities,
               "recipe_sha256": sha256(Path(__file__)), "homebrew_core_revision": args.homebrew_core_revision,

@@ -29,7 +29,8 @@ All notable changes are documented here using Keep a Changelog categories.
 
 - Discover the complete macOS runtime dependency union with the pinned
   Homebrew command, including explicit compression/XML/protocol metadata
-  providers and recorded library/share pkg-config directories. Retain command
+  providers, recorded library/share pkg-config directories and owned metadata
+  for the verified macOS bzip2 archive. Retain command
   failures and FFmpeg configure probe diagnostics in candidate logs.
 
 - Allow the Intel macOS candidate's LLVM/Rust dependency build to finish within
