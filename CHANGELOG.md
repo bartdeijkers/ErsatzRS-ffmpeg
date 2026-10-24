@@ -29,6 +29,8 @@ All notable changes are documented here using Keep a Changelog categories.
 
 - Select the exact pinned Homebrew recipes on hosted macOS images that carry
   local formula overrides, allowing candidate builds to reach compilation.
+- Pin compatible Cask migration data alongside core to prevent older hosted
+  Azure CLI migrations from causing recursive dependency resolution.
 - Pin and record the compatible Homebrew tool as well as its recipes, so older
   hosted tools do not reject the selected dependency-resource syntax.
 
