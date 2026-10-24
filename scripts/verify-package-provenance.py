@@ -279,7 +279,7 @@ def main():
     if args.command == "runtime":
         verify_runtime(args.package_root.resolve())
         return
-    require(re.fullmatch(r"runtime-candidate-2\.0\.6-[0-9a-f]{8,40}", args.candidate_tag), "unexpected candidate tag")
+    require(re.fullmatch(rf"runtime-candidate-{re.escape(VERSION)}-[0-9a-f]{{8,40}}", args.candidate_tag), "unexpected candidate tag")
     require(re.fullmatch(r"[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+", args.repo), "invalid repository")
     output = args.output.resolve()
     require(not output.exists(), "candidate output directory already exists")

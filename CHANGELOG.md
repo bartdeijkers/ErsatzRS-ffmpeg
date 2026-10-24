@@ -29,6 +29,9 @@ All notable changes are documented here using Keep a Changelog categories.
 
 ### Fixed
 
+- Match draft package-verification tags to the exact current runtime version,
+  rejecting older candidate namespaces before downloading assets.
+
 - Retain the exact public Mozilla CA source and checked MPL 2.0 text when
   Homebrew supplies no standalone notice, preserving the package notice gate.
   Recognize SPDX notice directories and dependency-owned links, and report all
