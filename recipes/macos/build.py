@@ -31,8 +31,13 @@ def require(condition, message):
 
 
 def run(arguments, cwd=None, capture=False, timeout=3600, env=None):
-    result = subprocess.run([str(value) for value in arguments], cwd=cwd, env=env,
-                            capture_output=capture, check=True, timeout=timeout)
+    try:
+        result = subprocess.run([str(value) for value in arguments], cwd=cwd, env=env,
+                                capture_output=capture, check=True, timeout=timeout)
+    except subprocess.CalledProcessError as error:
+        if capture and error.stderr:
+            sys.stderr.write(error.stderr.decode("utf-8", errors="replace"))
+        raise
     return result.stdout.decode("utf-8") if capture else ""
 
 
@@ -110,7 +115,7 @@ def build(args):
     require(run(["git", "-C", cask, "rev-parse", "HEAD"], capture=True).strip() == args.homebrew_cask_revision,
             "Homebrew cask checkout differs from selected migration data")
     brew_prefix = Path(run([brew, "--prefix"], capture=True).strip())
-    closure = run([brew, "deps", "--installed", "--recursive", *DEPENDENCIES], capture=True).splitlines()
+    closure = run([brew, "deps", "--installed", "--union", *DEPENDENCIES], capture=True).splitlines()
     formula_names = sorted(set(DEPENDENCIES) | set(closure))
     info = json.loads(run([brew, "info", "--json=v2", *formula_names], capture=True))
     inventory = []
