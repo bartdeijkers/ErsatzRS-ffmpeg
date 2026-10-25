@@ -55,6 +55,11 @@ Intel QSV, AMD AMF and native Linux NVIDIA interop remain explicitly unverified.
 [Teletext package checks](scripts/TELETEXT.md) cover exact-page functional
 decoding and source/license inventories. The four v2.0.6 packages retain their
 immutable bytes; adding a notice inventory requires a new unpublished candidate.
-[Native macOS candidates](recipes/macos/README.md) prepare the two missing RIDs
-through a manual build-only workflow. Their native software, dependency/license
-and installed-application acceptance remain open; no new release is implied.
+[Native macOS recipes](recipes/macos/README.md) and existing artifacts/evidence
+are retained. Both macOS architectures are **Deferred by maintainer decision**
+(2026-10-26), not accepted, during the private-repository period. Their workflow
+is disabled: no builds, crossbuilds, packages, toolchain installations,
+acceptance/runtime trials or paid runners/services may start. Resumption requires
+explicit maintainer permission even after a visibility change. The required
+matrix remains Linux x64, ARM64, ARMv7 and Windows x64; all functional teletext,
+license/provenance and required-platform gates remain. No release is implied.

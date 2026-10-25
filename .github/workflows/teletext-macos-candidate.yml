@@ -1,7 +1,8 @@
 name: Build macOS teletext candidates
 
 # Explicit candidate construction only. No tag, release or container publishing.
-# Both native architectures remain required for Phase 9 acceptance.
+# Both macOS architectures are Deferred by maintainer decision (2026-10-26).
+# Restore execution only after explicit permission; visibility changes are insufficient.
 on:
   workflow_dispatch:
     inputs:
@@ -21,6 +22,7 @@ permissions:
 
 jobs:
   candidate:
+    if: ${{ false }}
     name: Native ${{ matrix.rid }} candidate
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 120

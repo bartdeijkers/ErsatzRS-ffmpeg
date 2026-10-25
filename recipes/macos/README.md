@@ -1,7 +1,16 @@
 # Native macOS teletext candidates
 
+**Deferred by maintainer decision (2026-10-26), not accepted.** During the
+private-repository period, do not run macOS builds, crossbuilds, packages,
+toolchain installations, acceptance/runtime trials or paid runners/services.
+The workflow is disabled. Preserve code, guards, artifacts and evidence without
+deliberate incompatibility; additional macOS repairs are deferred. All recipes
+below require explicit permission to resume, even after a visibility change.
+The current required matrix is Linux x64, ARM64, ARMv7 and Windows x64; full
+functional Phase 9A requirements remain unchanged.
+
 This recipe prepares the two missing Phase 9 runtime candidates. It has not yet
-been executed on macOS. The manual `teletext-macos-candidate.yml` workflow builds
+been executed on macOS. The retained, disabled `teletext-macos-candidate.yml` workflow describes builds of
 `osx-x64` on `macos-15-intel` and `osx-arm64` on `macos-15`; it has read-only
 repository permissions and uploads artifacts without publishing a release.
 
@@ -10,13 +19,13 @@ that runner's Homebrew checkout and installed formulae. It is not a maintenance
 command for a personal Mac. The workflow pins Homebrew/core to an explicit Git
 revision and disables automatic update/API formula replacement. Installed
 versions must match those recipes; unexpected dependencies or missing notices
-fail candidate construction. Both native architectures remain required.
+fail candidate construction. Both architectures retain their future proof obligations after authorized resumption.
 
 The requested build baseline is macOS 15.0. This is a candidate test baseline,
 not approval to drop older operating systems, nor proof that copied Homebrew
 libraries support a lower deployment target. Inspect actual Mach-O deployment
 requirements and the project's supported OS baseline before accepting or
-publishing packages. Existing six-RID acceptance remains open.
+publishing packages. No native macOS or six-platform acceptance is claimed.
 
 FFmpeg uses the same pinned 9.0 source and common patches as v2.0.6. libzvbi is
 built statically from `d3a5ee9f2b047bf16cd1ee5ccf6ec05ee75409d0` (0.2.45). The
