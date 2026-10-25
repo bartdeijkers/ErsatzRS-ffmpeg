@@ -53,6 +53,33 @@ class ProcessBounds(unittest.IsolatedAsyncioTestCase):
                 await probe.verify(Path(sys.executable), fixture)
 
 
+class OriginalPtsContract(unittest.IsolatedAsyncioTestCase):
+    def output(self, change=None):
+        pts = [90000 + cycle * 90000 + offset for cycle in range(8)
+               for offset in (0, 3600, 18000, 21600, 36000, 39600, 72000)]
+        if change:
+            pts = change(pts)
+        return ("#tb 0: 1/90000\n" + "".join(
+            f"0, {value}, {value}, 0, 139, 0x73766b6c\n" for value in pts)).encode()
+
+    async def test_complete_declared_clock_is_accepted(self):
+        with patch.object(probe, "run", return_value=self.output()):
+            self.assertEqual(await probe.verify_original_pts(["ffmpeg"], b"fixture"), 56)
+
+    async def test_retiming_omission_and_duplication_are_rejected(self):
+        for change in (lambda pts: [value - 1 for value in pts],
+                       lambda pts: pts[:-1], lambda pts: [pts[0], *pts]):
+            with self.subTest(change=change), patch.object(probe, "run", return_value=self.output(change)):
+                with self.assertRaisesRegex(ValueError, "changed, omitted or duplicated"):
+                    await probe.verify_original_pts(["ffmpeg"], b"fixture")
+
+    async def test_foreign_clock_units_are_rejected(self):
+        output = self.output().replace(b"1/90000", b"1/1000")
+        with patch.object(probe, "run", return_value=output):
+            with self.assertRaisesRegex(ValueError, "time base differs"):
+                await probe.verify_original_pts(["ffmpeg"], b"fixture")
+
+
 class SourceBounds(unittest.TestCase):
     def setUp(self):
         self.temporary = tempfile.TemporaryDirectory()

@@ -47,4 +47,15 @@ actual dependency-image/compiler provenance with that inventory. Published
 archives remain immutable; this procedure never authorizes replacing release
 assets or promoting a new runtime pin.
 
-The macOS candidate recipe is documented in `recipes/macos/README.md`.
+The opt-in `--original-pts` check additionally requires
+`-fflags +preserve_teletext_pts` (common patch 0019) and verifies all 56 declared
+PTS/DTS values in the pinned fixture, rejecting retiming, omission and duplication.
+The flag leaves default PCR repair and DVB subtitle behavior unchanged. HLS
+inherits the flag into its segment demuxers; callers need not guess a URL's format
+or reopen its source. Older runtimes reject the unknown flag. Applications must
+qualify the exact runtime before selecting this contract; this optional package
+check alone proves neither ordinary-route clock correctness nor managed adoption.
+Published runtime bytes and pins remain unchanged.
+
+The macOS candidate recipe is retained in `recipes/macos/README.md`; execution
+is deferred by maintainer decision and requires explicit permission to resume.

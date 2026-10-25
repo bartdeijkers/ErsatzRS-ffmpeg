@@ -1,0 +1,44 @@
+From: ErsatzRS maintainers
+Subject: [PATCH] avformat: opt in to original DVB teletext PES timestamps
+
+Keep the default PCR-based repair and DVB subtitle behavior unchanged. The
+explicit decoding fflags value applies before format detection, and HLS already
+copies its parent format flags into segment demuxers. Callers can therefore
+preserve teletext timestamps without guessing a network source's format or
+opening it a second time. Older runtimes reject the unknown flag.
+
+This is a first-party opt-in contract, not an upstream default change. Use it
+only after exact-runtime capability and original-source-clock qualification.
+---
+--- a/libavformat/avformat.h
++++ b/libavformat/avformat.h
+@@ -1485,6 +1485,7 @@
+ #define AVFMT_FLAG_SORT_DTS    0x10000 ///< try to interleave outputted packets by dts (using this flag can slow demuxing down)
+ #define AVFMT_FLAG_FAST_SEEK   0x80000 ///< Enable fast, but inaccurate seeks for some formats
+ #define AVFMT_FLAG_AUTO_BSF   0x200000 ///< Add bitstream filters as requested by the muxer
++#define AVFMT_FLAG_PRESERVE_TELETEXT_PTS 0x400000 ///< Do not replace DVB teletext PES timestamps with PCR-derived values.
+ 
+     /**
+      * Maximum number of bytes read from input in order to determine stream
+--- a/libavformat/options_table.h
++++ b/libavformat/options_table.h
+@@ -43,6 +43,7 @@
+ {"flush_packets", "reduce the latency by flushing out packets immediately", 0, AV_OPT_TYPE_CONST, {.i64 = AVFMT_FLAG_FLUSH_PACKETS }, INT_MIN, INT_MAX, E, .unit = "fflags"},
+ {"ignidx", "ignore index", 0, AV_OPT_TYPE_CONST, {.i64 = AVFMT_FLAG_IGNIDX }, INT_MIN, INT_MAX, D, .unit = "fflags"},
+ {"genpts", "generate pts", 0, AV_OPT_TYPE_CONST, {.i64 = AVFMT_FLAG_GENPTS }, INT_MIN, INT_MAX, D, .unit = "fflags"},
++{"preserve_teletext_pts", "preserve original DVB teletext PES timestamps", 0, AV_OPT_TYPE_CONST, {.i64 = AVFMT_FLAG_PRESERVE_TELETEXT_PTS }, INT_MIN, INT_MAX, D, .unit = "fflags"},
+ {"nofillin", "do not fill in missing values that can be exactly calculated", 0, AV_OPT_TYPE_CONST, {.i64 = AVFMT_FLAG_NOFILLIN }, INT_MIN, INT_MAX, D, .unit = "fflags"},
+ {"noparse", "disable AVParsers, this needs nofillin too", 0, AV_OPT_TYPE_CONST, {.i64 = AVFMT_FLAG_NOPARSE }, INT_MIN, INT_MAX, D, .unit = "fflags"},
+ {"igndts", "ignore dts", 0, AV_OPT_TYPE_CONST, {.i64 = AVFMT_FLAG_IGNDTS }, INT_MIN, INT_MAX, D, .unit = "fflags"},
+--- a/libavformat/mpegts.c
++++ b/libavformat/mpegts.c
+@@ -1394,7 +1394,8 @@
+                     buf_size -= 5;
+                 }
+                 if (   pes->ts->fix_teletext_pts
+-                    && (   pes->st->codecpar->codec_id == AV_CODEC_ID_DVB_TELETEXT
++                    && (   (pes->st->codecpar->codec_id == AV_CODEC_ID_DVB_TELETEXT
++                            && !(pes->stream->flags & AVFMT_FLAG_PRESERVE_TELETEXT_PTS))
+                         || pes->st->codecpar->codec_id == AV_CODEC_ID_DVB_SUBTITLE)
+                     ) {
+                     AVProgram *p = NULL;

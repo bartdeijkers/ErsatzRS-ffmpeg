@@ -22,6 +22,12 @@ All notable changes are documented here using Keep a Changelog categories.
 
 ### Fixed
 
+- Add an opt-in original DVB teletext PES timestamp contract for direct and
+  nested demuxers without changing default repair or DVB subtitle behavior.
+  The bounded package verifier can check every declared fixture timestamp;
+  application integration, platform qualification and managed adoption remain
+  separate requirements.
+
 - Backport FFmpeg's decoder-output throttling revert to prevent native teletext
   subtitle consumers from stopping with buffered audio/video. The exact Linux
   candidate passes ordinary Off/Burn delivery and Bookworm package checks;

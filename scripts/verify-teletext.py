@@ -78,7 +78,24 @@ async def run(command, arguments, fixture=b"", limit=65536):
                                               discard(child.stderr), child.wait()), 2)
 
 
-async def verify(ffmpeg, fixture_path, expected_sha256=None, emulator=None, sysroot=None, execution_kind="direct"):
+async def verify_original_pts(command, fixture):
+    """Check every declared PES time in the pinned original eight-cycle fixture."""
+    output = (await run(command, [
+        "-copyts", "-fflags", "+preserve_teletext_pts", "-f", "mpegts",
+        "-i", "pipe:0", "-map", "0:s:0", "-c", "copy", "-f", "framecrc", "pipe:1"],
+        fixture)).decode("utf-8")
+    require("#tb 0: 1/90000" in output, "original teletext clock time base differs")
+    packets = [line.split(",") for line in output.splitlines()
+               if line and not line.startswith("#")]
+    expected = [90000 + cycle * 90000 + offset for cycle in range(8)
+                for offset in (0, 3600, 18000, 21600, 36000, 39600, 72000)]
+    actual = [(int(packet[1]), int(packet[2])) for packet in packets]
+    require(actual == [(pts, pts) for pts in expected],
+            "original teletext PES timestamps were changed, omitted or duplicated")
+    return len(actual)
+
+
+async def verify(ffmpeg, fixture_path, expected_sha256=None, emulator=None, sysroot=None, execution_kind="direct", original_pts=False):
     executable_sha256 = sha256(ffmpeg)
     if expected_sha256:
         require(re.fullmatch(r"[0-9a-f]{64}", expected_sha256), "invalid executable digest")
@@ -116,16 +133,21 @@ async def verify(ffmpeg, fixture_path, expected_sha256=None, emulator=None, sysr
         cyan += red < 80 and g > 160 and blue > 160
         green += red < 80 and g > 160 and blue < 80
     require(cyan > 10 and green > 10, "decoded page colours are missing")
-    return {"teletext": "passed", "ffmpeg_sha256": executable_sha256,
+    result = {"teletext": "passed", "ffmpeg_sha256": executable_sha256,
             "fixture_sha256": FIXTURE_SHA256, "execution": "emulated" if emulator else execution_kind,
             "selected_pages": [200, 888], "excluded_page": 201,
             "cyan_pixels": cyan, "green_pixels": green}
+    if original_pts:
+        result["original_pts_packets"] = await verify_original_pts(command, fixture)
+    return result
 
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("ffmpeg", type=Path)
     parser.add_argument("--expected-sha256")
+    parser.add_argument("--original-pts", action="store_true",
+                        help="Require the opt-in original teletext PES clock contract")
     parser.add_argument("--fixture", type=Path,
                         default=Path(__file__).parent / "fixtures/teletext.ts")
     parser.add_argument("--emulator", type=Path)
@@ -134,7 +156,8 @@ def main():
                         help="Mark external binfmt/container emulation explicitly")
     args = parser.parse_args()
     result = asyncio.run(verify(args.ffmpeg.resolve(), args.fixture.resolve(),
-                               args.expected_sha256, args.emulator, args.sysroot, args.execution_kind))
+                               args.expected_sha256, args.emulator, args.sysroot, args.execution_kind,
+                               args.original_pts))
     print(json.dumps(result, sort_keys=True))
 
 
