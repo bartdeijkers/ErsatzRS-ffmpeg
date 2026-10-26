@@ -49,7 +49,10 @@ assets or promoting a new runtime pin.
 
 The opt-in `--original-pts` check additionally requires
 `-fflags +preserve_teletext_pts` (common patch 0019) and verifies all 56 declared
-PTS/DTS values in the pinned fixture, rejecting retiming, omission and duplication.
+PTS/DTS values in a derived copy of the pinned fixture, rejecting retiming,
+omission and duplication. Only its 56 adaptation-only PCR fields advance by one
+second; every PES and payload byte remains unchanged. This makes default repair
+observable and prevents an ignored flag from satisfying the original-clock gate.
 The flag leaves default PCR repair and DVB subtitle behavior unchanged. HLS
 inherits the flag into its segment demuxers; callers need not guess a URL's format
 or reopen its source. Older runtimes reject the unknown flag. Applications must

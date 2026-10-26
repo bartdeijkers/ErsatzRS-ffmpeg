@@ -24,7 +24,8 @@ All notable changes are documented here using Keep a Changelog categories.
 
 - Add an opt-in original DVB teletext PES timestamp contract for direct and
   nested demuxers without changing default repair or DVB subtitle behavior.
-  The bounded package verifier can check every declared fixture timestamp;
+  The bounded package verifier checks every declared fixture timestamp against
+  conflicting PCR values while preserving all PES/payload bytes;
   application integration, platform qualification and managed adoption remain
   separate requirements.
 

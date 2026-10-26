@@ -78,12 +78,32 @@ async def run(command, arguments, fixture=b"", limit=65536):
                                               discard(child.stderr), child.wait()), 2)
 
 
+def original_pts_fixture(fixture):
+    """Skew only the pinned fixture's 56 PCRs; retain every original PES byte."""
+    prepared = bytearray(fixture)
+    changed = 0
+    for pos in range(0, len(prepared) - 187, 188):
+        packet = prepared[pos:pos + 188]
+        if (packet[:3] != b"\x47\x01\x00" or packet[3] & 0x30 != 0x20
+                or packet[4] != 183 or packet[5] != 0x10):
+            continue
+        clock = packet[6:12]
+        base = ((clock[0] << 25) | (clock[1] << 17) | (clock[2] << 9)
+                | (clock[3] << 1) | (clock[4] >> 7)) + 90000
+        prepared[pos + 6:pos + 11] = bytes([
+            (base >> 25) & 255, (base >> 17) & 255, (base >> 9) & 255,
+            (base >> 1) & 255, ((base & 1) << 7) | (clock[4] & 127)])
+        changed += 1
+    require(changed == 56, "original teletext PCR challenge fixture differs")
+    return bytes(prepared)
+
+
 async def verify_original_pts(command, fixture):
     """Check every declared PES time in the pinned original eight-cycle fixture."""
     output = (await run(command, [
         "-copyts", "-fflags", "+preserve_teletext_pts", "-f", "mpegts",
         "-i", "pipe:0", "-map", "0:s:0", "-c", "copy", "-f", "framecrc", "pipe:1"],
-        fixture)).decode("utf-8")
+        original_pts_fixture(fixture))).decode("utf-8")
     require("#tb 0: 1/90000" in output, "original teletext clock time base differs")
     packets = [line.split(",") for line in output.splitlines()
                if line and not line.startswith("#")]

@@ -54,6 +54,21 @@ class ProcessBounds(unittest.IsolatedAsyncioTestCase):
 
 
 class OriginalPtsContract(unittest.IsolatedAsyncioTestCase):
+    def test_challenge_changes_only_56_pcr_fields_not_pes_or_payload(self):
+        original = (ROOT / "fixtures/teletext.ts").read_bytes()
+        prepared = probe.original_pts_fixture(original)
+        changed = 0
+        for pos in range(0, len(original), 188):
+            before, after = original[pos:pos + 188], prepared[pos:pos + 188]
+            if before != after:
+                self.assertEqual(before[:6], after[:6])
+                self.assertEqual(before[11:], after[11:])
+                self.assertEqual(before[:3], b"\x47\x01\x00")
+                self.assertEqual(before[3] & 0x30, 0x20)
+                changed += 1
+        self.assertEqual(changed, 56)
+        self.assertEqual(len(original), len(prepared))
+
     def output(self, change=None):
         pts = [90000 + cycle * 90000 + offset for cycle in range(8)
                for offset in (0, 3600, 18000, 21600, 36000, 39600, 72000)]
@@ -64,20 +79,20 @@ class OriginalPtsContract(unittest.IsolatedAsyncioTestCase):
 
     async def test_complete_declared_clock_is_accepted(self):
         with patch.object(probe, "run", return_value=self.output()):
-            self.assertEqual(await probe.verify_original_pts(["ffmpeg"], b"fixture"), 56)
+            self.assertEqual(await probe.verify_original_pts(["ffmpeg"], (ROOT / "fixtures/teletext.ts").read_bytes()), 56)
 
     async def test_retiming_omission_and_duplication_are_rejected(self):
         for change in (lambda pts: [value - 1 for value in pts],
                        lambda pts: pts[:-1], lambda pts: [pts[0], *pts]):
             with self.subTest(change=change), patch.object(probe, "run", return_value=self.output(change)):
                 with self.assertRaisesRegex(ValueError, "changed, omitted or duplicated"):
-                    await probe.verify_original_pts(["ffmpeg"], b"fixture")
+                    await probe.verify_original_pts(["ffmpeg"], (ROOT / "fixtures/teletext.ts").read_bytes())
 
     async def test_foreign_clock_units_are_rejected(self):
         output = self.output().replace(b"1/90000", b"1/1000")
         with patch.object(probe, "run", return_value=output):
             with self.assertRaisesRegex(ValueError, "time base differs"):
-                await probe.verify_original_pts(["ffmpeg"], b"fixture")
+                await probe.verify_original_pts(["ffmpeg"], (ROOT / "fixtures/teletext.ts").read_bytes())
 
 
 class SourceBounds(unittest.TestCase):
