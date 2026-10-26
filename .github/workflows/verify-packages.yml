@@ -1,4 +1,4 @@
-name: Verify existing v2.0.6 packages
+name: Verify existing v2.0.7 packages
 
 # This is an execution gate for already built, checksum-pinned packages. It
 # neither builds FFmpeg nor publishes packages or Docker images. Publication
@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
     inputs:
       candidate_tag:
-        description: 'Draft release tag runtime-candidate-2.0.6-<source checkpoint>'
+        description: 'Draft release tag runtime-candidate-2.0.7-<source checkpoint>'
         required: true
         type: string
       manifest_sha256:
@@ -74,7 +74,7 @@ jobs:
         run: |
           set -euo pipefail
           test "$(docker image inspect --format '{{.Id}}' "$ACCEPTANCE_IMAGE")" = "$ACCEPTANCE_IMAGE"
-          pkg="$VERIFY_WORK/download/expanded/ersatzrs-ffmpeg-2.0.6-$RID"
+          pkg="$VERIFY_WORK/download/expanded/ersatzrs-ffmpeg-2.0.7-$RID"
           # Install test tooling only in the disposable AMD64 baseline container;
           # ARM images already contain Python and DejaVu. Package mounts are read-only.
           setup=''
@@ -152,7 +152,7 @@ jobs:
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
-          $pkg = Join-Path $env:VERIFY_WORK 'download/expanded/ersatzrs-ffmpeg-2.0.6-win-x64'
+          $pkg = Join-Path $env:VERIFY_WORK 'download/expanded/ersatzrs-ffmpeg-2.0.7-win-x64'
           $tool = Join-Path $pkg 'ffmpeg.exe'
           $log = Join-Path $env:VERIFY_WORK 'runtime.log'
           python scripts/verify-package-provenance.py runtime $pkg | Tee-Object -FilePath $log

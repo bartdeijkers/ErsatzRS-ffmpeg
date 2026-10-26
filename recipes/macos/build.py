@@ -19,10 +19,16 @@ import sys
 ROOT = Path(__file__).resolve().parents[2]
 FFMPEG_REVISION = "d32b387f2b0a484599d4587d651891f0c63c4238"
 ZVBI_REVISION = "d3a5ee9f2b047bf16cd1ee5ccf6ec05ee75409d0"
+MPL2_LICENSE_URL = "https://www.mozilla.org/media/MPL/2.0/index.txt"
+MPL2_LICENSE_SHA256 = "3f3d9e0024b1921b067d6f7f88deb4a60cbe7a78e76c64e3f1d7fc3b779b9d04"
 DEPENDENCIES = ("cairo", "librsvg", "fontconfig", "freetype", "harfbuzz", "fribidi",
                 "libass", "zimg", "svt-av1", "jpeg-xl", "x264", "x265", "libvpx",
-                "opus", "openssl@3", "rav1e", "dav1d")
+                "opus", "openssl@3", "rav1e", "dav1d", "zlib", "bzip2", "expat", "xorgproto", "libffi", "libxml2")
 TOOLS = ("pkgconf", "nasm", "autoconf", "automake", "libtool", "gettext", "dylibbundler")
+# The modules required by the selected pinned FFmpeg configure flags.
+PKGCONFIG_MODULES = ("cairo", "librsvg-2.0", "fontconfig", "freetype2", "harfbuzz",
+                     "fribidi", "libass", "zimg", "zvbi-0.2", "SvtAv1Enc", "libjxl",
+                     "libjxl_threads", "x264", "x265", "vpx", "opus", "openssl", "rav1e", "dav1d")
 
 
 def require(condition, message):
@@ -31,8 +37,13 @@ def require(condition, message):
 
 
 def run(arguments, cwd=None, capture=False, timeout=3600, env=None):
-    result = subprocess.run([str(value) for value in arguments], cwd=cwd, env=env,
-                            capture_output=capture, check=True, timeout=timeout)
+    try:
+        result = subprocess.run([str(value) for value in arguments], cwd=cwd, env=env,
+                                capture_output=capture, check=True, timeout=timeout)
+    except subprocess.CalledProcessError as error:
+        if capture and error.stderr:
+            sys.stderr.write(error.stderr.decode("utf-8", errors="replace"))
+        raise
     return result.stdout.decode("utf-8") if capture else ""
 
 
@@ -84,12 +95,86 @@ def verify_bundle(package, architecture):
     return {path.relative_to(package).as_posix(): sha256(path) for path in objects}
 
 
+def bzip2_pkgconfig(directory, keg, version):
+    # Homebrew creates this metadata only on Linux; use its verified Mac keg.
+    require((keg / "lib/libbz2.a").is_file() and (keg / "include/bzlib.h").is_file(),
+            "pinned bzip2 headers or archive are missing")
+    directory.mkdir(parents=True, exist_ok=True)
+    metadata = directory / "bzip2.pc"
+    metadata.write_text(f"""prefix={keg}
+libdir=${{prefix}}/lib
+includedir=${{prefix}}/include
+
+Name: bzip2
+Description: Pinned bzip2 compression library
+Version: {version}
+Libs: -L${{libdir}} -lbz2
+Cflags: -I${{includedir}}
+""")
+    return metadata
+
+
+def ca_certificate_notices(record, keg, destination):
+    # Use the original public source, never the post-install system/keychain merge.
+    original = keg / "share/ca-certificates/cacert.pem"
+    require(record["license"] == "MPL-2.0", "CA source license differs from the reviewed notice")
+    require(original.is_file() and not original.is_symlink()
+            and sha256(original) == record["source"]["checksum"],
+            "original public CA source differs from the pinned checksum")
+    license_text = ROOT / "recipes/macos/licenses/MPL-2.0.txt"
+    require(sha256(license_text) == MPL2_LICENSE_SHA256, "MPL license text checksum differs")
+    notices = {}
+    for name, source in (("cacert.pem", original), ("LICENSE-MPL-2.0.txt", license_text)):
+        shutil.copy2(source, destination / name)
+        notices[name] = sha256(destination / name)
+    record["license_text_source"] = {"url": MPL2_LICENSE_URL, "sha256": MPL2_LICENSE_SHA256}
+    return notices
+
+
+def collect_dependency_notices(inventory, notices):
+    notices.mkdir(parents=True)
+    missing = []
+    for record in inventory:
+        keg = record.pop("keg")
+        dest = notices / record["name"]
+        dest.mkdir()
+        formula_file = keg / ".brew" / (record["name"] + ".rb")
+        require(formula_file.is_file(), "installed dependency formula is missing")
+        shutil.copy2(formula_file, dest / "formula.rb")
+        record["formula_sha256"] = sha256(dest / "formula.rb")
+        files = {}
+        candidates = []
+        for path in keg.rglob("*"):
+            relative = path.relative_to(keg)
+            notice = re.search(r"^(COPYING|LICENSE|LICENCE|COPYRIGHT)", path.name, re.IGNORECASE)
+            notice = notice or any(part.upper() in {"LICENSES", "LICENCES"} for part in relative.parts[:-1])
+            if not notice or path.is_dir():
+                continue
+            candidates.append(relative.as_posix())
+            if not path.is_file():
+                continue
+            require(path.resolve().is_relative_to(keg.resolve()), "license symlink escapes pinned dependency")
+            output = dest / relative
+            output.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(path, output)
+            files[relative.as_posix()] = sha256(output)
+        if record["name"] == "ca-certificates":
+            files.update(ca_certificate_notices(record, keg, dest))
+        if not files:
+            missing.append(f'{record["name"]} (candidates: {", ".join(candidates) or "none"})')
+        record["notice_files"] = files
+    require(not missing, "license notices missing for " + "; ".join(missing))
+    (notices / "dependencies.json").write_text(json.dumps(inventory, indent=2, sort_keys=True) + "\n")
+
+
 def build(args):
     require(platform.system() == "Darwin", "this recipe requires a native macOS runner")
     architecture = {"osx-x64": "x86_64", "osx-arm64": "arm64"}[args.rid]
     require(platform.machine() == architecture, "native runner architecture does not match RID")
     require(re.fullmatch(r"[0-9]+\.[0-9]+\.[0-9]+(?:-[A-Za-z0-9.-]+)?", args.version), "invalid package version")
     require(re.fullmatch(r"[0-9a-f]{40}", args.homebrew_core_revision), "invalid Homebrew core revision")
+    require(re.fullmatch(r"[0-9a-f]{40}", args.homebrew_brew_revision), "invalid Homebrew tool revision")
+    require(re.fullmatch(r"[0-9a-f]{40}", args.homebrew_cask_revision), "invalid Homebrew cask revision")
     require(re.fullmatch(r"[0-9]+\.[0-9]+", args.deployment_target), "invalid deployment target")
     require(1 <= args.jobs <= 8, "build concurrency must be between one and eight")
     require(not args.work.exists(), "build directory already exists")
@@ -98,16 +183,23 @@ def build(args):
     package = args.work / f"ersatzrs-ffmpeg-{args.version}-{args.rid}"
     brew = shutil.which("brew")
     require(brew, "Homebrew is required on the build runner")
+    brew_repository = run([brew, "--repository"], capture=True).strip()
+    require(run(["git", "-C", brew_repository, "rev-parse", "HEAD"], capture=True).strip() == args.homebrew_brew_revision,
+            "Homebrew tool checkout differs from selected revision")
     core = run([brew, "--repository", "homebrew/core"], capture=True).strip()
     require(run(["git", "-C", core, "rev-parse", "HEAD"], capture=True).strip() == args.homebrew_core_revision,
             "Homebrew core checkout differs from selected dependency recipes")
+    cask = run([brew, "--repository", "homebrew/cask"], capture=True).strip()
+    require(run(["git", "-C", cask, "rev-parse", "HEAD"], capture=True).strip() == args.homebrew_cask_revision,
+            "Homebrew cask checkout differs from selected migration data")
     brew_prefix = Path(run([brew, "--prefix"], capture=True).strip())
-    closure = run([brew, "deps", "--installed", "--recursive", *DEPENDENCIES], capture=True).splitlines()
+    closure = run([brew, "deps", "--installed", "--union", *DEPENDENCIES], capture=True).splitlines()
     formula_names = sorted(set(DEPENDENCIES) | set(closure))
     info = json.loads(run([brew, "info", "--json=v2", *formula_names], capture=True))
     inventory = []
     library_owners = {}
     pkg_config = [prefix / "lib/pkgconfig"]
+    generated_metadata = {}
     for formula in info["formulae"]:
         expected = formula["versions"]["stable"]
         expected += f'_{formula["revision"]}' if formula["revision"] else ""
@@ -120,7 +212,10 @@ def build(args):
         for library in keg.rglob("*.dylib"):
             if library.is_file():
                 library_owners.setdefault(library.name, set()).add(name)
-        pkg_config.append(keg / "lib/pkgconfig")
+        pkg_config.extend((keg / "lib/pkgconfig", keg / "share/pkgconfig"))
+        if name == "bzip2" and not (keg / "lib/pkgconfig/bzip2.pc").is_file():
+            metadata = bzip2_pkgconfig(pkg_config[0], keg, formula["versions"]["stable"])
+            generated_metadata[metadata.name] = metadata
         inventory.append({"name": name, "version": installed["version"],
                           "license": formula["license"], "source": formula["urls"]["stable"],
                           "bottle": formula.get("bottle"), "keg": keg})
@@ -129,6 +224,11 @@ def build(args):
     environment["PKG_CONFIG_PATH"] = os.pathsep.join(map(str, pkg_config))
     environment["PKG_CONFIG_LIBDIR"] = environment["PKG_CONFIG_PATH"]
     environment["MACOSX_DEPLOYMENT_TARGET"] = args.deployment_target
+    # FFmpeg's version-prefixed librsvg include also needs the recorded root.
+    rsvg_keg = next(item["keg"] for item in inventory if item["name"] == "librsvg")
+    require((rsvg_keg / "include/librsvg-2.0/librsvg/rsvg.h").is_file(),
+            "pinned librsvg public header is missing")
+    environment["CPPFLAGS"] = f"-I{rsvg_keg / 'include'}"
     # Do not inherit arbitrary user flags or unrecorded library search paths.
     environment.pop("CFLAGS", None)
     environment.pop("CXXFLAGS", None)
@@ -136,6 +236,9 @@ def build(args):
     environment.pop("SDKROOT", None)
     environment.pop("CPATH", None)
     environment.pop("LIBRARY_PATH", None)
+    # Establish the complete notice inventory before spending time compiling.
+    notices = args.work / "homebrew-notices"
+    collect_dependency_notices(inventory, notices)
     zvbi = args.work / "zvbi"
     checkout("https://github.com/zapping-vbi/zvbi", ZVBI_REVISION, zvbi)
     run(["./autogen.sh"], zvbi, env=environment)
@@ -145,6 +248,8 @@ def build(args):
     run(["make", "-C", "src", f"-j{args.jobs}"], zvbi, env=environment)
     run(["make", "-C", "src", "install"], zvbi, env=environment)
     run(["make", "SUBDIRS=.", "install"], zvbi, env=environment)
+    # Report the complete metadata gap together, before the longer compile.
+    run(["pkg-config", "--exists", "--print-errors", *PKGCONFIG_MODULES], env=environment)
     ffmpeg = args.work / "ffmpeg-source"
     checkout("https://github.com/FFmpeg/FFmpeg.git", FFMPEG_REVISION, ffmpeg)
     patches = sorted((ROOT / "images/ffmpeg-builds/patches/common").glob("*.patch"))
@@ -160,8 +265,15 @@ def build(args):
              "--enable-libzvbi", "--enable-libsvtav1", "--enable-libjxl", "--enable-libx264",
              "--enable-libx265", "--enable-libvpx", "--enable-libopus", "--enable-openssl",
              "--enable-librav1e", "--enable-libdav1d", "--enable-videotoolbox", "--enable-audiotoolbox"]
-    run(["./configure", f"--prefix={prefix}", f"--arch={architecture}", "--target-os=darwin", *flags],
-        ffmpeg, env=environment)
+    try:
+        run(["./configure", f"--prefix={prefix}", f"--arch={architecture}", "--target-os=darwin", *flags],
+            ffmpeg, env=environment)
+    except subprocess.CalledProcessError:
+        # Configure reports probe details only in this file, not its stderr.
+        diagnostic = ffmpeg / "ffbuild/config.log"
+        if diagnostic.is_file():
+            sys.stderr.write(diagnostic.read_text(errors="replace")[-16000:])
+        raise
     run(["make", f"-j{args.jobs}", "ffmpeg", "ffprobe"], ffmpeg, env=environment)
     package.mkdir()
     for tool in ("ffmpeg", "ffprobe"):
@@ -175,27 +287,7 @@ def build(args):
     for library in (package / "lib").glob("*.dylib"):
         require(len(library_owners.get(library.name, set())) == 1,
                 "bundled library has a missing or ambiguous dependency origin")
-    notices = package / "build-info/homebrew"
-    notices.mkdir(parents=True)
-    for record in inventory:
-        keg = record.pop("keg")
-        dest = notices / record["name"]
-        dest.mkdir()
-        formula_file = keg / ".brew" / (record["name"] + ".rb")
-        require(formula_file.is_file(), "installed dependency formula is missing")
-        shutil.copy2(formula_file, dest / "formula.rb")
-        record["formula_sha256"] = sha256(dest / "formula.rb")
-        files = {}
-        for path in keg.rglob("*"):
-            if path.is_file() and not path.is_symlink() and re.search(r"^(COPYING|LICENSE|LICENCE|COPYRIGHT)", path.name, re.IGNORECASE):
-                relative = path.relative_to(keg)
-                output = dest / relative
-                output.parent.mkdir(parents=True, exist_ok=True)
-                shutil.copy2(path, output)
-                files[relative.as_posix()] = sha256(output)
-        require(files, f'license notices missing for {record["name"]}')
-        record["notice_files"] = files
-    (notices / "dependencies.json").write_text(json.dumps(inventory, indent=2, sort_keys=True) + "\n")
+    shutil.copytree(notices, package / "build-info/homebrew")
     tools = json.loads(run([brew, "info", "--json=v2", *TOOLS], capture=True))
     tool_versions = {f["name"]: [i["version"] for i in f["installed"]] for f in tools["formulae"]}
     (notices / "build-tools.json").write_text(json.dumps(tool_versions, indent=2, sort_keys=True) + "\n")
@@ -206,6 +298,10 @@ def build(args):
     run([sys.executable, ROOT / "scripts/verify-teletext-source.py", package,
          "--expected-revision", ZVBI_REVISION])
     build_info = package / "build-info"
+    for name, metadata in generated_metadata.items():
+        destination = build_info / "pkgconfig" / name
+        destination.parent.mkdir(exist_ok=True)
+        shutil.copy2(metadata, destination)
     shutil.copy2(Path(__file__), build_info / "macos-build.py")
     shutil.copy2(ROOT / "scripts/stage-teletext-source.py", build_info / "stage-teletext-source.py")
     patch_folder = build_info / "ffmpeg-patches"
@@ -218,9 +314,14 @@ def build(args):
     record = {"schema_version": 1, "rid": args.rid, "candidate_version": args.version,
               "ffmpeg_commit": FFMPEG_REVISION, "zvbi_commit": ZVBI_REVISION,
               "configure_flags": flags, "deployment_target": args.deployment_target,
+              "cppflags": environment["CPPFLAGS"],
+              "skip_unrelated_homebrew_dependents": os.environ.get("HOMEBREW_NO_INSTALLED_DEPENDENTS_CHECK") == "1",
+              "generated_pkgconfig_sha256": {name: sha256(path) for name, path in generated_metadata.items()},
               "macos_version": platform.mac_ver()[0], "xcode": run(["xcodebuild", "-version"], capture=True).strip(),
               "patches": {p.name: sha256(p) for p in patches}, "mach_o_sha256": identities,
               "recipe_sha256": sha256(Path(__file__)), "homebrew_core_revision": args.homebrew_core_revision,
+              "homebrew_brew_revision": args.homebrew_brew_revision,
+              "homebrew_cask_revision": args.homebrew_cask_revision,
               "library_owners": {p.name: next(iter(library_owners[p.name])) for p in (package / "lib").glob("*.dylib")},
               "acceptance": "candidate recipe; Phase 9 platform acceptance remains separate"}
     (package / "build-info/source.json").write_text(json.dumps(record, indent=2, sort_keys=True) + "\n")
@@ -249,6 +350,8 @@ def main():
     parser.add_argument("--work", type=Path, required=True)
     parser.add_argument("--jobs", type=int, default=3)
     parser.add_argument("--homebrew-core-revision", required=True)
+    parser.add_argument("--homebrew-brew-revision", required=True)
+    parser.add_argument("--homebrew-cask-revision", required=True)
     parser.add_argument("--deployment-target", default="15.0")
     args = parser.parse_args()
     args.work = args.work.resolve()

@@ -49,6 +49,16 @@ compatibility with the older API used by the existing x64 packages. Its source
 is ErsatzTV/ErsatzTV-ffmpeg commit
 `5bdca62b3d8b129d7ddec66647e8a36c7d680678`.
 
+The unpublished v2.0.7 ARM64 candidate first extends the exact dependency image
+with `rockchip/Dockerfile` (build context: `images/ffmpeg-builds/`). Its reviewed
+MPP/RGA revisions and archive hashes are embedded in the recipes. Use the
+resulting verified image identity for `prepare-arm-build.py`'s ARM64 build;
+ARMv7 retains its existing dependency image and never receives the ARM64-only
+`0020-rkmpp-rkrga-hardware-pipeline.patch`. The shared Next companion is exported
+separately from `/opt/ersatzrs-next-mpp` with both licences and author notices;
+it is not part of FFmpeg's runtime dependency closure. Native hardware success
+is not inferred from these builds.
+
 ## ARMv7 dependency preparation
 
 BtbN has no ARMv7 target. `armv7-toolchain/` supplies the hard-float ARMv7

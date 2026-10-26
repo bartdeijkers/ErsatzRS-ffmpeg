@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Verify exact v2.0.6 candidate archives without rebuilding or publishing.
+"""Verify exact v2.0.7 candidate archives without rebuilding or publishing.
 
 An external manifest digest pins the inventory before execution. Embedded
 records identify source and patch inputs, not the later verification commit
@@ -20,10 +20,10 @@ import tarfile
 import tempfile
 import zipfile
 
-VERSION = "2.0.6"
+VERSION = "2.0.7"
 SOURCE = "d32b387f2b0a484599d4587d651891f0c63c4238"
 BUILDS_SOURCE = "d04d5526084bb699ca2b400c32bbab7eb3ebcb4e"
-RUNTIME_BASE = "bf3db00fd5a879c15e0d065e2871d1a749be86da"
+RUNTIME_BASE = "112683788c32c47e584442d55f15806152442136"
 RIDS = {"linux-x64", "linux-arm64", "linux-arm", "win-x64"}
 HEX = re.compile(r"[0-9a-f]{64}\Z")
 ROOT = Path(__file__).resolve().parents[1]
@@ -46,6 +46,8 @@ def expected_patches(rid):
     folders = [ROOT / "images/ffmpeg-builds/patches/common"]
     if rid == "win-x64":
         folders.append(ROOT / "images/ffmpeg-builds/patches/windows")
+    elif rid == "linux-arm64":
+        folders.append(ROOT / "images/ffmpeg-builds/patches/linuxarm64")
     return {p.relative_to(ROOT).as_posix(): digest(p)
             for folder in folders for p in folder.glob("*.patch")}
 
@@ -84,7 +86,7 @@ def load_manifest(path, expected_hash):
     require(digest(path) == expected_hash, "candidate manifest checksum mismatch")
     manifest = json.loads(path.read_text())
     require(manifest.get("schema_version") == 1, "unsupported manifest schema")
-    require(manifest.get("version") == VERSION, "candidate version must be 2.0.6")
+    require(manifest.get("version") == VERSION, "candidate version must be 2.0.7")
     require(manifest.get("ffmpeg_source") == SOURCE, "unexpected FFmpeg source revision")
     packages = manifest.get("packages")
     require(isinstance(packages, list) and len(packages) == len(RIDS), "four packages are required")
@@ -277,7 +279,7 @@ def main():
     if args.command == "runtime":
         verify_runtime(args.package_root.resolve())
         return
-    require(re.fullmatch(r"runtime-candidate-2\.0\.6-[0-9a-f]{8,40}", args.candidate_tag), "unexpected candidate tag")
+    require(re.fullmatch(rf"runtime-candidate-{re.escape(VERSION)}-[0-9a-f]{{8,40}}", args.candidate_tag), "unexpected candidate tag")
     require(re.fullmatch(r"[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+", args.repo), "invalid repository")
     output = args.output.resolve()
     require(not output.exists(), "candidate output directory already exists")

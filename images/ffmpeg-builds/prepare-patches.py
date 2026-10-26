@@ -31,4 +31,9 @@ shutil.copytree(patches / "common", work / "ersatzrs-patches")
 if platform == "win64":
     for patch in sorted((patches / "windows").glob("*.patch")):
         shutil.copy2(patch, work / "ersatzrs-patches")
+elif platform == "linuxarm64":
+    # The RKMPP/RGA pipeline also extends pixel-format enums. Keep its ABI
+    # changes confined to the one RID that provides these pinned libraries.
+    for patch in sorted((patches / "linuxarm64").glob("*.patch")):
+        shutil.copy2(patch, work / "ersatzrs-patches")
 script.write_text(text)

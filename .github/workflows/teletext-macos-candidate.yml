@@ -11,10 +11,29 @@ on:
         required: true
         default: '2.0.7-teletext-candidate'
         type: string
+      rid:
+        description: 'Build both required candidates, or retry one failed architecture'
+        required: true
+        default: 'all'
+        type: choice
+        options:
+          - all
+          - osx-x64
+          - osx-arm64
       homebrew_core_revision:
         description: 'Exact 40-character Homebrew/core source revision'
         required: true
         default: '84c454b4e56ff7f076cabc90ff58e0d0de01fab1'
+        type: string
+      homebrew_brew_revision:
+        description: 'Exact compatible 40-character Homebrew/brew source revision'
+        required: true
+        default: '8f10429b56be28a25032b87463fffc95e556b5bc'
+        type: string
+      homebrew_cask_revision:
+        description: 'Exact compatible 40-character Homebrew/cask migration revision'
+        required: true
+        default: 'd4d25dbd93eef9ed20f4ae73f3c269a728a412eb'
         type: string
 
 permissions:
@@ -25,19 +44,26 @@ jobs:
     if: ${{ false }}
     name: Native ${{ matrix.rid }} candidate
     runs-on: ${{ matrix.runner }}
-    timeout-minutes: 120
+    # Intel has no current Homebrew bottles and must compile the LLVM/Rust
+    # dependency chain. Keep the shorter bound for the bottled ARM64 path.
+    timeout-minutes: ${{ matrix.rid == 'osx-x64' && 360 || 120 }}
     strategy:
       fail-fast: false
       max-parallel: 1
       matrix:
-        include:
-          - rid: osx-x64
-            runner: macos-15-intel
-          - rid: osx-arm64
-            runner: macos-15
+        # A targeted retry reuses the other architecture's valid evidence;
+        # the default matrix still requires both native candidates.
+        include: >-
+          ${{ fromJSON(
+            inputs.rid == 'osx-x64' && '[{"rid":"osx-x64","runner":"macos-15-intel"}]' ||
+            inputs.rid == 'osx-arm64' && '[{"rid":"osx-arm64","runner":"macos-15"}]' ||
+            '[{"rid":"osx-x64","runner":"macos-15-intel"},{"rid":"osx-arm64","runner":"macos-15"}]'
+          ) }}
     env:
       HOMEBREW_NO_AUTO_UPDATE: '1'
       HOMEBREW_NO_INSTALL_FROM_API: '1'
+      # Candidate dependencies are checked independently; leave unrelated tools alone.
+      HOMEBREW_NO_INSTALLED_DEPENDENTS_CHECK: '1'
     steps:
       - name: Checkout build and verification inputs
         uses: actions/checkout@v4
@@ -48,21 +74,41 @@ jobs:
       - name: Select exact dependency recipes on this ephemeral runner
         env:
           CORE_REVISION: ${{ inputs.homebrew_core_revision }}
+          BREW_REVISION: ${{ inputs.homebrew_brew_revision }}
+          CASK_REVISION: ${{ inputs.homebrew_cask_revision }}
         shell: bash
         run: |
           set -euo pipefail
           [[ "$CORE_REVISION" =~ ^[0-9a-f]{40}$ ]]
+          [[ "$BREW_REVISION" =~ ^[0-9a-f]{40}$ ]]
+          [[ "$CASK_REVISION" =~ ^[0-9a-f]{40}$ ]]
+          # The pinned recipes use the Homebrew 7 test-resource DSL, while
+          # hosted images can still ship Homebrew 6. Pin the compatible tool too.
+          brew_repository="$(brew --repository)"
+          git -C "$brew_repository" fetch --depth=1 origin "$BREW_REVISION"
+          git -C "$brew_repository" checkout --detach --force FETCH_HEAD
+          test "$(git -C "$brew_repository" rev-parse HEAD)" = "$BREW_REVISION"
+          brew --version
           brew tap --force homebrew/core
           core="$(brew --repository homebrew/core)"
           git -C "$core" fetch --depth=1 origin "$CORE_REVISION"
-          git -C "$core" checkout --detach FETCH_HEAD
+          # Hosted images may carry formula overrides; this ephemeral tap must
+          # match the reviewed revision rather than the runner image's edits.
+          git -C "$core" checkout --detach --force FETCH_HEAD
           test "$(git -C "$core" rev-parse HEAD)" = "$CORE_REVISION"
+          # Core's Azure CLI migration must not cycle through an older runner
+          # Cask migration back to core. No casks are installed by this recipe.
+          brew tap --force homebrew/cask
+          cask="$(brew --repository homebrew/cask)"
+          git -C "$cask" fetch --depth=1 origin "$CASK_REVISION"
+          git -C "$cask" checkout --detach --force FETCH_HEAD
+          test "$(git -C "$cask" rev-parse HEAD)" = "$CASK_REVISION"
           brew install pkgconf nasm autoconf automake libtool gettext dylibbundler \
             cairo librsvg fontconfig freetype harfbuzz fribidi libass zimg svt-av1 \
-            jpeg-xl x264 x265 libvpx opus openssl@3 rav1e dav1d
+            jpeg-xl x264 x265 libvpx opus openssl@3 rav1e dav1d zlib bzip2 expat xorgproto libffi libxml2
           brew upgrade pkgconf nasm autoconf automake libtool gettext dylibbundler \
             cairo librsvg fontconfig freetype harfbuzz fribidi libass zimg svt-av1 \
-            jpeg-xl x264 x265 libvpx opus openssl@3 rav1e dav1d
+            jpeg-xl x264 x265 libvpx opus openssl@3 rav1e dav1d zlib bzip2 expat xorgproto libffi libxml2
       - name: Check source and process-bound regressions
         shell: bash
         run: python3 scripts/test-teletext-tools.py
@@ -71,6 +117,8 @@ jobs:
           CANDIDATE_VERSION: ${{ inputs.version }}
           RID: ${{ matrix.rid }}
           CORE_REVISION: ${{ inputs.homebrew_core_revision }}
+          BREW_REVISION: ${{ inputs.homebrew_brew_revision }}
+          CASK_REVISION: ${{ inputs.homebrew_cask_revision }}
         shell: bash
         run: |
           set -euo pipefail
@@ -78,6 +126,8 @@ jobs:
           echo "CANDIDATE_WORK=$work" >> "$GITHUB_ENV"
           python3 recipes/macos/build.py --rid "$RID" --version "$CANDIDATE_VERSION" \
             --work "$work" --jobs 3 --homebrew-core-revision "$CORE_REVISION" \
+            --homebrew-brew-revision "$BREW_REVISION" \
+            --homebrew-cask-revision "$CASK_REVISION" \
             2>&1 | tee "$RUNNER_TEMP/teletext-macos-$RID.log"
       - name: Upload candidate and evidence
         if: always()
@@ -87,5 +137,6 @@ jobs:
           path: |
             ${{ env.CANDIDATE_WORK }}/ersatzrs-ffmpeg-*.tar.gz*
             ${{ env.CANDIDATE_WORK }}/ersatzrs-ffmpeg-*/build-info/
+            ${{ env.CANDIDATE_WORK }}/ffmpeg-source/ffbuild/config.log
             ${{ runner.temp }}/teletext-macos-${{ matrix.rid }}.log
           if-no-files-found: warn

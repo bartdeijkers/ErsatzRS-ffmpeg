@@ -9,23 +9,39 @@ below require explicit permission to resume, even after a visibility change.
 The current required matrix is Linux x64, ARM64, ARMv7 and Windows x64; full
 functional Phase 9A requirements remain unchanged.
 
-This recipe prepares the two missing Phase 9 runtime candidates. It has not yet
-been executed on macOS. The retained, disabled `teletext-macos-candidate.yml` workflow describes builds of
+Native ARM64 compilation, relocation/signing construction and selected metadata
+checks have passed; complete notices, strict package verification and decoded
+software acceptance have not passed. Intel dependency bootstrap exceeded the
+original two-hour bound and remains unverified. These are component results,
+not complete macOS package or application acceptance.
+
+The retained, disabled `teletext-macos-candidate.yml` workflow describes builds of
 `osx-x64` on `macos-15-intel` and `osx-arm64` on `macos-15`; it has read-only
 repository permissions and uploads artifacts without publishing a release.
+The default matrix builds both architectures. A targeted `rid` input retries
+only a failed architecture while retaining the other's evidence. Intel receives
+a six-hour job bound because the pinned recipes have no Intel bottles for the
+librsvg LLVM/Rust dependency chain; the two-hour limit expired during LLVM
+compilation. ARM64 retains its two-hour bound. Source and acceptance checks are
+unchanged.
 
 Use an ephemeral native runner. Dependency provisioning deliberately changes
 that runner's Homebrew checkout and installed formulae. It is not a maintenance
 command for a personal Mac. The workflow pins Homebrew/core to an explicit Git
-revision and disables automatic update/API formula replacement. Installed
+revision and pins the compatible Homebrew tool independently, disabling automatic
+update/API formula replacement. The reviewed recipes use Homebrew 7's
+`resource ..., :test` syntax; hosted Homebrew 6 images cannot load them. Cask migration data is pinned to the compatible core snapshot too: old hosted
+Cask data otherwise sends Azure CLI back to core, creating a resolution cycle.
+No cask is installed. All three
+checkout identities are checked before building and recorded in source provenance. Installed
 versions must match those recipes; unexpected dependencies or missing notices
-fail candidate construction. Both architectures retain their future proof obligations after authorized resumption.
+fail candidate construction. Both native architectures remain required.
 
 The requested build baseline is macOS 15.0. This is a candidate test baseline,
 not approval to drop older operating systems, nor proof that copied Homebrew
 libraries support a lower deployment target. Inspect actual Mach-O deployment
 requirements and the project's supported OS baseline before accepting or
-publishing packages. No native macOS or six-platform acceptance is claimed.
+publishing packages. Existing six-RID acceptance remains open.
 
 FFmpeg uses the same pinned 9.0 source and common patches as v2.0.6. libzvbi is
 built statically from `d3a5ee9f2b047bf16cd1ee5ccf6ec05ee75409d0` (0.2.45). The
@@ -59,7 +75,9 @@ Example on a provisioned ephemeral runner:
 ```sh
 python3 recipes/macos/build.py --rid osx-arm64 \
   --version 2.0.7-teletext-candidate --work "$RUNNER_TEMP/teletext-macos-osx-arm64" \
-  --jobs 3 --homebrew-core-revision <exact-40-character-revision>
+  --jobs 3 --homebrew-core-revision <exact-40-character-core-revision> \
+  --homebrew-brew-revision <exact-40-character-brew-revision> \
+  --homebrew-cask-revision <exact-40-character-cask-revision>
 ```
 
 Do not modify v2.0.6 assets or change ErsatzRS's managed pin before exact candidate

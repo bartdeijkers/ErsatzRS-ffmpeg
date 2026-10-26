@@ -21,6 +21,33 @@ for pinned dependency inputs, bounded host Docker builds, archive provenance,
 and the required software runtime checks. Native hardware acceptance is tracked
 separately from emulated software execution.
 
+## Downloadable v2.0.7 packages
+
+[Version 2.0.7](https://github.com/bartdeijkers/ErsatzRS-ffmpeg/releases/tag/v2.0.7)
+retains the pinned FFmpeg 9.0 source and adds monotonic
+subtitle-heartbeat and VideoToolbox caption corrections. Linux ARM64 alone adds
+the RKMPP/RGA hardware pipeline; the other RIDs keep their pixel-format ABI.
+The ARM64 dependency extension lives in `images/ffmpeg-builds/rockchip/` and
+pins both source revisions and archive checksums. It builds static libraries
+for FFmpeg and a separate shared MPP companion for the private Next package.
+
+Linux x64, Linux ARM64, Linux ARMv7 and Windows x64 archives pass all four
+existing-package CI checks at verification commit
+`aa14713ef37dc8276cfbc7b2cdabf00a5251486c`
+([run 40117309596](https://github.com/bartdeijkers/ErsatzRS-ffmpeg/actions/runs/40117309596)).
+Publication reuses those exact archive bytes. Verify each archive with its
+`.sha256` sidecar; `candidate-manifest.json` retains the complete pinned inventory.
+macOS builds are deferred until maintainer resume and no macOS package is shipped.
+Final ErsatzRS application integration remains separate.
+Rockchip RKMPP/RGA,
+Intel QSV HDR, AMD VAAPI and native macOS VideoToolbox captions remain explicitly
+approved, unverified hardware acceptance debt. Existing v2.0.6 packages retain
+their immutable bytes. This package release does not rebuild or publish Docker images.
+
+Remove each local fix when the selected upstream source supplies equivalent
+behavior and its original regression passes. The unchanged heartbeat and
+VideoToolbox regressions are retained under `scripts/upstream-regressions/`.
+
 ## Version 2.0.6 package verification
 
 Version 2.0.6 rebuilds all four downloadable RIDs with animated WebP loop/seek
@@ -54,7 +81,7 @@ Intel QSV, AMD AMF and native Linux NVIDIA interop remain explicitly unverified.
 
 [Teletext package checks](scripts/TELETEXT.md) cover exact-page functional
 decoding and source/license inventories. The four v2.0.6 packages retain their
-immutable bytes; adding a notice inventory requires a new unpublished candidate.
+immutable bytes; v2.0.7 supplies the new verified notice/source inventories.
 [Native macOS recipes](recipes/macos/README.md) and existing artifacts/evidence
 are retained. Both macOS architectures are **Deferred by maintainer decision**
 (2026-10-26), not accepted, during the private-repository period. Their workflow
