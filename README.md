@@ -14,6 +14,16 @@ These FFmpeg 9.0 images are built with `--enable-cairo`, `--enable-libharfbuzz`,
 Release and container builds fail unless both graphics filters, the complete text-shaping stack, and a real
 file-backed `drawtext` render are available.
 
+## Published stable runtime source
+
+Stable [2.0.8](https://github.com/bartdeijkers/ErsatzRS-ffmpeg/releases/tag/2.0.8)
+was published from source commit
+`457453f79d5282878f5595e4bb4acd592d83f591`. Synchronizing `main` with this
+already qualified source preserves the published tag and package bytes; it
+neither rebuilds nor republishes artifacts or changes application runtime pins.
+Use `[no build]` in the source-only delivery tip commit to suppress automatic
+container publication. macOS package and runtime acceptance remain deferred.
+
 ## Downloadable ARM packages
 
 See [ARM package build and acceptance](images/ffmpeg-builds/ARM-PACKAGES.md)
