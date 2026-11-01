@@ -13,6 +13,11 @@ All notable changes are documented here using Keep a Changelog categories.
 
 ### Fixed
 
+- Reset finite concat input duration state on reopen and preserve buffered
+  beginning packets when looping a freshly opened non-seekable input. Retain
+  static duration/inpoint/outpoint behavior. Application bootstrap, required
+  platform/package verification and managed adoption remain separate gates.
+
 - Add an opt-in original DVB teletext PES timestamp contract for direct and
   nested demuxers without changing default repair or DVB subtitle behavior.
   The bounded package verifier checks every declared fixture timestamp against

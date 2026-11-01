@@ -1,0 +1,40 @@
+From: ErsatzRS maintainers
+Subject: [PATCH] avformat/concat: keep reopened finite input clocks local
+
+A repeated finite HTTP programme URL can return a shorter input on the next
+playlist loop. Its duration must not inherit the previous input's maximum DTS.
+Reset that input-local high-water value after a successful fresh open.
+
+A global zero-seek which just opened a non-seekable first input is already at
+its beginning. Preserve the probe's buffered initial packets instead of seeking
+again and dropping the start. Explicit inpoints have already been applied by
+open_file. Keep per-stream, nonzero, existing-context and normal seekable paths.
+
+Application integration still requires complete codec/track initialization,
+strict delivery/transport checks and platform/package qualification. No source
+clock tolerance, readrate, encoder or stream-map change is introduced here.
+---
+--- a/libavformat/concatdec.c
++++ b/libavformat/concatdec.c
+@@ -378,6 +378,9 @@
+         av_dict_free(&options);
+     }
+     cat->cur_file = file;
++    // A reopened live URL can describe a different finite programme.
++    // Derive its duration from this input, not a previous input's DTS maximum.
++    file->next_dts = AV_NOPTS_VALUE;
+     file->start_time = !fileno ? 0 :
+                        cat->files[fileno - 1].start_time +
+                        cat->files[fileno - 1].duration;
+@@ -899,6 +902,11 @@
+     if (cat->cur_file != &cat->files[left]) {
+         if ((ret = open_file(avf, left)) < 0)
+             return ret;
++        // Fresh non-seekable input is already positioned at this file's
++        // beginning (including its inpoint). Keep its buffered probe packets.
++        if (stream == -1 && ts == 0 && min_ts <= 0 && max_ts >= 0 && cat->avf->pb &&
++            !(cat->avf->pb->seekable & AVIO_SEEKABLE_NORMAL))
++            return 0;
+     } else {
+         cat->avf = cur_avf;
+     }
