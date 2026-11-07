@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Verify exact v2.0.7 candidate archives without rebuilding or publishing.
+"""Verify exact v2.0.10 candidate archives without rebuilding or publishing.
 
 An external manifest digest pins the inventory before execution. Embedded
 records identify source and patch inputs, not the later verification commit
@@ -15,16 +15,23 @@ from pathlib import Path, PurePosixPath
 import re
 import shutil
 import struct
+import sys
 import subprocess
 import tarfile
 import tempfile
 import zipfile
 
-VERSION = "2.0.7"
+VERSION = "2.0.10"
 SOURCE = "d32b387f2b0a484599d4587d651891f0c63c4238"
 BUILDS_SOURCE = "d04d5526084bb699ca2b400c32bbab7eb3ebcb4e"
-RUNTIME_BASE = "112683788c32c47e584442d55f15806152442136"
+RUNTIME_BASE = "e267ec7cd5398c3797cce4be1eaea127c893697f"
 RIDS = {"linux-x64", "linux-arm64", "linux-arm", "win-x64"}
+TELETEXT_REVISIONS = {
+    "linux-x64": "41477c97c8edf7a01f1594b2a95b94f0117eed21",
+    "win-x64": "41477c97c8edf7a01f1594b2a95b94f0117eed21",
+    "linux-arm64": "d3a5ee9f2b047bf16cd1ee5ccf6ec05ee75409d0",
+    "linux-arm": "d3a5ee9f2b047bf16cd1ee5ccf6ec05ee75409d0",
+}
 HEX = re.compile(r"[0-9a-f]{64}\Z")
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -86,7 +93,7 @@ def load_manifest(path, expected_hash):
     require(digest(path) == expected_hash, "candidate manifest checksum mismatch")
     manifest = json.loads(path.read_text())
     require(manifest.get("schema_version") == 1, "unsupported manifest schema")
-    require(manifest.get("version") == VERSION, "candidate version must be 2.0.7")
+    require(manifest.get("version") == VERSION, f"candidate version must be {VERSION}")
     require(manifest.get("ffmpeg_source") == SOURCE, "unexpected FFmpeg source revision")
     packages = manifest.get("packages")
     require(isinstance(packages, list) and len(packages) == len(RIDS), "four packages are required")
@@ -204,6 +211,12 @@ def verify_layout(root, package):
         embedded[filename] = checksum
     expected = {Path(p["path"]).name: p["sha256"] for p in package["patches"]}
     require(embedded == expected, "embedded applied patch inventory differs")
+    # Phase9 source/notice delivery remains required when producing a successor.
+    source_check = subprocess.run([
+        sys.executable, str(ROOT / "scripts/verify-teletext-source.py"), str(root),
+        "--expected-revision", TELETEXT_REVISIONS[package["rid"]],
+    ], capture_output=True, timeout=60)
+    require(source_check.returncode == 0, "exact libzvbi source/notice inventory is missing or invalid")
 
 
 def execute(tool, *arguments):

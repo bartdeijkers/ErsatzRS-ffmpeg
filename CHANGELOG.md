@@ -13,6 +13,16 @@ All notable changes are documented here using Keep a Changelog categories.
 
 ### Fixed
 
+- Prepare the local 2.0.10 FFmpeg9 successor for separate-input queue scheduling,
+  skipped MPEG-2 caption cleanup, hardware colour changes, Vulkan/VAAPI reverse
+  synchronization, QSV clock/frame-pool safety and AMF header/HDR/frame handling.
+  Retain teletext PES timestamps, concat clocks, SVG and sparse-stream behavior.
+  The unsupported AMF VC-1 wrapper is removed; software and QSV VC-1 remain.
+  Local build/runtime checks do not establish unavailable native hardware or
+  authorize publication/application adoption.
+- Require the exact per-platform libzvbi source/license/archive inventory in new
+  2.0.10 packages, retaining compiler/dependency-image provenance separately.
+
 - Reset finite concat input duration state on reopen and preserve buffered
   beginning packets when looping a freshly opened non-seekable input. Retain
   static duration/inpoint/outpoint behavior. Application bootstrap, required

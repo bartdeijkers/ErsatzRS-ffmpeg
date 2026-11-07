@@ -14,6 +14,19 @@ These FFmpeg 9.0 images are built with `--enable-cairo`, `--enable-libharfbuzz`,
 Release and container builds fail unless both graphics filters, the complete text-shaping stack, and a real
 file-backed `drawtext` render are available.
 
+## Local 2.0.10 successor
+
+Accepted ErsatzRS ADR0130 qualifies fourteen fixed-window upstream corrections
+on the retained FFmpeg9 base, plus removal of the unsupported AMF VC-1 wrapper.
+The local candidate preserves existing teletext PES timestamps, concat clocks,
+SVG/drawvg/text and sparse-stream fixes. Four packages are built from recorded
+source deltas and exact cached dependency image IDs; source and payload checksums
+remain required. Unavailable native ARM, Intel/AMD/Rockchip and macOS hardware
+checks retain their explicit unverified/deferred status.
+
+This is local successor work. Publication, managed adoption and application
+acceptance remain separate; no currently published package is replaced by it.
+
 ## Published stable runtime source
 
 Stable [2.0.8](https://github.com/bartdeijkers/ErsatzRS-ffmpeg/releases/tag/2.0.8)

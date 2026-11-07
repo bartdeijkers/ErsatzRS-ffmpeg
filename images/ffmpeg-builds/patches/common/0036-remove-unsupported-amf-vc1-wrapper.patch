@@ -1,0 +1,61 @@
+Remove the unsupported AMF VC-1 wrapper, retaining MPEG-2 capability checks and software/QSV VC-1 decoders. Fixed upstream ADR 0130 contract.
+
+diff --git a/configure b/configure
+--- a/configure
++++ b/configure
+@@ -3705,6 +3705,5 @@
+ mpeg4_v4l2m2m_decoder_deps="v4l2_m2m mpeg4_v4l2_m2m"
+ mpeg4_v4l2m2m_encoder_deps="v4l2_m2m mpeg4_v4l2_m2m"
+-vc1_amf_decoder_deps="amf"
+ vc1_cuvid_decoder_deps="cuvid"
+ vc1_mmal_decoder_deps="mmal"
+ vc1_qsv_decoder_select="qsvdec"
+diff --git a/libavcodec/Makefile b/libavcodec/Makefile
+--- a/libavcodec/Makefile
++++ b/libavcodec/Makefile
+@@ -787,7 +787,6 @@
+ OBJS-$(CONFIG_VC1_DECODER)             += vc1dec.o vc1_block.o vc1_loopfilter.o \
+                                           vc1_mc.o vc1_pred.o vc1.o vc1data.o \
+                                           msmpeg4_vc1_data.o wmv2data.o
+-OBJS-$(CONFIG_VC1_AMF_DECODER)         += amfdec.o
+ OBJS-$(CONFIG_VC1_CUVID_DECODER)       += cuviddec.o
+ OBJS-$(CONFIG_VC1_MMAL_DECODER)        += mmaldec.o
+ OBJS-$(CONFIG_VC1_QSV_DECODER)         += qsvdec.o
+diff --git a/libavcodec/allcodecs.c b/libavcodec/allcodecs.c
+--- a/libavcodec/allcodecs.c
++++ b/libavcodec/allcodecs.c
+@@ -906,7 +906,6 @@
+ extern const FFCodec ff_mpeg4_mediacodec_encoder;
+ extern const FFCodec ff_mpeg4_v4l2m2m_encoder;
+ extern const FFCodec ff_prores_videotoolbox_encoder;
+-extern const FFCodec ff_vc1_amf_decoder;
+ extern const FFCodec ff_vc1_cuvid_decoder;
+ extern const FFCodec ff_vp8_cuvid_decoder;
+ extern const FFCodec ff_vp8_mediacodec_decoder;
+diff --git a/libavcodec/amfdec.c b/libavcodec/amfdec.c
+--- a/libavcodec/amfdec.c
++++ b/libavcodec/amfdec.c
+@@ -121,9 +121,6 @@
+         case AV_CODEC_ID_MPEG2VIDEO:
+             codec_id = AMFVideoDecoderUVD_MPEG2;
+             break;
+-        case AV_CODEC_ID_VC1:
+-            codec_id = AMFVideoDecoderUVD_VC1;
+-            break;
+         default:
+             break;
+     }
+@@ -136,7 +133,7 @@
+     // such decoder (newer VCN blocks dropped both), Init() succeeds, and the
+     // first SubmitInput() then fails with AMF_NOT_SUPPORTED followed by a crash
+     // on teardown. Ask for caps up front and refuse cleanly instead.
+-    if (avctx->codec->id == AV_CODEC_ID_MPEG2VIDEO || avctx->codec->id == AV_CODEC_ID_VC1) {
++    if (avctx->codec->id == AV_CODEC_ID_MPEG2VIDEO) {
+         AMFCaps *caps = NULL;
+         AMF_ACCELERATION_TYPE accel = AMF_ACCEL_NOT_SUPPORTED;
+         res = ctx->decoder->pVtbl->GetCaps(ctx->decoder, &caps);
+@@ -1112,4 +1109,3 @@
+ DEFINE_AMF_DECODER(vp9, VP9, NULL)
+ DEFINE_AMF_DECODER(av1, AV1, NULL)
+ DEFINE_AMF_DECODER(mpeg2, MPEG2VIDEO, NULL)
+-DEFINE_AMF_DECODER(vc1, VC1, NULL)
