@@ -14,18 +14,24 @@ These FFmpeg 9.0 images are built with `--enable-cairo`, `--enable-libharfbuzz`,
 Release and container builds fail unless both graphics filters, the complete text-shaping stack, and a real
 file-backed `drawtext` render are available.
 
-## Local 2.0.10 successor
+## Version 2.0.10 packages
 
 Accepted ErsatzRS ADR0130 qualifies fourteen fixed-window upstream corrections
 on the retained FFmpeg9 base, plus removal of the unsupported AMF VC-1 wrapper.
-The local candidate preserves existing teletext PES timestamps, concat clocks,
+The successor preserves existing teletext PES timestamps, concat clocks,
 SVG/drawvg/text and sparse-stream fixes. Four packages are built from recorded
 source deltas and exact cached dependency image IDs; source and payload checksums
 remain required. Unavailable native ARM, Intel/AMD/Rockchip and macOS hardware
 checks retain their explicit unverified/deferred status.
 
-This is local successor work. Publication, managed adoption and application
-acceptance remain separate; no currently published package is replaced by it.
+The [2.0.10 release](https://github.com/bartdeijkers/ErsatzRS-ffmpeg/releases/tag/v2.0.10)
+publishes the four exact existing archives verified at source checkpoint
+`4be9c7aac9178c3e7bc762554db6e0f116ba4385` in
+[run 42351713434](https://github.com/bartdeijkers/ErsatzRS-ffmpeg/actions/runs/42351713434).
+Verify each archive with its SHA-256 sidecar and `candidate-manifest.json`.
+No Docker image is rebuilt or published. Managed adoption and application
+acceptance remain separate. The unresolved ErsatzTV Windows advisory is
+explicit follow-up debt; this runtime release does not claim to fix it.
 
 ## Published stable runtime source
 

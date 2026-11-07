@@ -13,16 +13,6 @@ All notable changes are documented here using Keep a Changelog categories.
 
 ### Fixed
 
-- Prepare the local 2.0.10 FFmpeg9 successor for separate-input queue scheduling,
-  skipped MPEG-2 caption cleanup, hardware colour changes, Vulkan/VAAPI reverse
-  synchronization, QSV clock/frame-pool safety and AMF header/HDR/frame handling.
-  Retain teletext PES timestamps, concat clocks, SVG and sparse-stream behavior.
-  The unsupported AMF VC-1 wrapper is removed; software and QSV VC-1 remain.
-  Local build/runtime checks do not establish unavailable native hardware or
-  authorize publication/application adoption.
-- Require the exact per-platform libzvbi source/license/archive inventory in new
-  2.0.10 packages, retaining compiler/dependency-image provenance separately.
-
 - Reset finite concat input duration state on reopen and preserve buffered
   beginning packets when looping a freshly opened non-seekable input. Retain
   static duration/inpoint/outpoint behavior. Application bootstrap, required
@@ -49,6 +39,25 @@ All notable changes are documented here using Keep a Changelog categories.
 - Join the already qualified 2.0.7 source/build/provenance inputs with the
   original-teletext-clock candidate. Preserve the explicit macOS deferral and
   existing code; published runtime bytes and application pins are unchanged.
+
+## [2.0.10] - 2026-11-07
+
+### Fixed
+
+- Correct separate-input queue scheduling, skipped MPEG-2 captions, hardware
+  colour transitions, Vulkan/VAAPI synchronization and QSV/AMF handling on the
+  retained FFmpeg 9 base. Preserve teletext timestamps, concat clocks,
+  SVG/drawvg/text and sparse-stream corrections.
+- Remove the unsupported AMF VC-1 wrapper; software and QSV VC-1 remain.
+
+### Changed
+
+- Publish four exact, already-tested Linux x64, ARM64, ARMv7 and Windows x64
+  packages after all existing-package CI jobs pass, with source, patch, payload,
+  libzvbi notice inventories and SHA-256 records. No package rebuild or Docker
+  publication. Application acceptance is separate; native ARM and unavailable
+  hardware/macOS remain unverified. The unresolved ErsatzTV Windows advisory
+  remains explicit follow-up debt, without a security-fix claim.
 
 ## [2.0.7] - 2026-10-24
 
