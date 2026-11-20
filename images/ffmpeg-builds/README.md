@@ -33,8 +33,8 @@ time (see below).
    anchor moves on a pin bump,
 3. run `./makeimage.sh <target> gpl 9.0`, extend that image with the SVG
    dependency layer below, then use its exact image ID for
-   `GIT_BRANCH_OVERRIDE=n<FFMPEG_VERSION> ./build.sh <target> gpl 9.0`
-   (`<target>` is `linux64` / `win64`; the `9.0` addin sets the version gating;
+   `GIT_BRANCH_OVERRIDE=n9.1 ./build.sh <target> gpl 9.0`
+   (`<target>` is `linux64` / `win64`; retain the pinned BtbN `9.0` dependency addin;
    `GIT_BRANCH_OVERRIDE` pins the exact FFmpeg release tag),
 4. repackage the resulting artifact into the ErsatzRS layout:
    - linux-x64: `ersatzrs-ffmpeg-<version>-linux-x64/ffmpeg` + `ffprobe`
@@ -66,22 +66,36 @@ are written to work for both `win*` and `linux*` targets:
 Pinned versions are bumped here when upstream FFmpeg-Builds or these libraries
 are updated.
 
+## FFmpeg 9.1 source and patches
+
+The package builds resolve `n9.1` to commit
+`74e4393595cf2b5857f0da925c4e0dd74ea306e5` before applying patches. The Linux
+containers verify the SHA-256 of FFmpeg's signed 9.1 bzip2 source archive.
+
+`prepare-patches.py` selects the 9.1 series for both build paths. The base
+common files remain available to the separately pinned macOS recipe. The 9.1
+series replaces the Vulkan export, original teletext clock, and hardware
+output colour patches with rebased versions. Upstream 9.1 already includes
+the behavior from patches 0014, 0016, 0017 and 0023. Windows keeps its D3D11
+pool fixes, and the ARM64 package keeps Rockchip packed NV20 distinct from
+upstream's endian-specific NV20 formats.
+
 ## Vulkan/CUDA export patch
 
-Both packages apply `patches/common/0001-vulkan-cuda-export.patch` after
+Both packages apply the n9.1 version of `0001-vulkan-cuda-export.patch` after
 cloning FFmpeg and before configure. `prepare-patches.py` adds a
 read-only patch mount to the pinned BtbN build; unexpected script structure
 or a patch that does not apply fails the build.
 
 This adapts ErsatzTV-ffmpeg's `patches/0002-vulkan-cuda-export-fix.patch`
-for FFmpeg n9.0. Export queries use the actual image creation flags and check
+for FFmpeg n9.1. Export queries use the actual image creation flags and check
 every backing image format. FFmpeg 9's DRM modifier logging and dedicated
 allocation requirements are retained; a dedicated requirement from any image
 is preserved. The image-flags query is shared across platforms; applying the
 correction only on Windows left Linux dependent on driver tolerance. Native
 Linux NVIDIA export remains unverified on the WSL build machine; software
-Vulkan checks do not replace that hardware gate. The patch is needed even though n9.0 is newer than the upstream
-8.1.2 package. Native Windows CUDA control, Vulkan/libplacebo/CUDA/NVENC
+Vulkan checks do not replace that hardware gate. Native Windows CUDA control,
+Vulkan/libplacebo/CUDA/NVENC
 execution and decoded output must pass before publishing a replacement.
 
 Run the manual native gate on a Windows NVIDIA machine against the extracted
@@ -109,8 +123,8 @@ clocks only when no active audio/video remains. The earlier slowest-stream fix
 is already in n9.0 and is insufficient by itself.
 
 `prepare-patches.py BUILD_TREE linux64` installs common patches; `win64` also
-installs the Windows D3D11 patches. Container builds apply the same common files
-with zero fuzz. Unexpected source or recipe structure fails the build.
+installs the Windows D3D11 patches. Container builds stage the selected common
+series with `--stage` and apply it with zero fuzz. Unexpected source or recipe structure fails the build.
 
 Run the deterministic source regression against the patched build tree:
 
@@ -191,7 +205,7 @@ docker build --build-arg BASE_IMAGE=<local-base-tag> \
 python3 images/ffmpeg-builds/prepare-patches.py <fresh-build-tree> <target>
 # Run in the prepared BtbN tree; target is linux64 or win64.
 FFBUILD_IMAGE_OVERRIDE=ersatzrs-ffmpeg-svg:<target> \
-  GIT_BRANCH_OVERRIDE=n9.0 ./build.sh <target> gpl 9.0
+  GIT_BRANCH_OVERRIDE=n9.1 ./build.sh <target> gpl 9.0
 ```
 
 Record exact image IDs, source revisions, patch hashes and resulting package

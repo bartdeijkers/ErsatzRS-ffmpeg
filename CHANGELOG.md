@@ -36,6 +36,10 @@ All notable changes are documented here using Keep a Changelog categories.
 
 ### Changed
 
+- Update the package and container build recipes to FFmpeg 9.1 “Gauss”.
+  Retain the ErsatzRS teletext, graphics and hardware pipeline patches that
+  9.1 still needs.
+
 - Join the already qualified 2.0.7 source/build/provenance inputs with the
   original-teletext-clock candidate. Preserve the explicit macOS deferral and
   existing code; published runtime bytes and application pins are unchanged.

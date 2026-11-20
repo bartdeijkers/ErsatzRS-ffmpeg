@@ -8,7 +8,7 @@ ENV MAKEFLAGS="-j4" \
     PATH="/root/.cargo/bin:${PATH}"
 
 ENV AOM=v3.12.0 \
-    FFMPEG_HARD=9.0 \
+    FFMPEG_HARD=9.1 \
     FONTCONFIG=2.16.0 \
     FREETYPE=2.13.3 \
     FREETYPE_SHA256=5c3a8e78f7b24c20b25b54ee575d6daa40007a5f4eea2845861c3409b3021747 \
@@ -654,12 +654,15 @@ RUN if [ -z ${FFMPEG_VERSION+x} ]; then \
     curl --retry 5 --retry-all-errors --retry-delay 5 --connect-timeout 30 -Lf \
     https://ffmpeg.org/releases/ffmpeg-${FFMPEG}.tar.bz2 \
     -o /tmp/ffmpeg.tar.bz2 && \
+    echo "1ba978f21a9cdf3506a98afb6b410f62c42a7225b08952ff437204156dfe7bef  /tmp/ffmpeg.tar.bz2" | sha256sum -c - && \
     tar -jxf /tmp/ffmpeg.tar.bz2 --strip-components=1 -C /tmp/ffmpeg && \
     rm /tmp/ffmpeg.tar.bz2
 
-COPY images/ffmpeg-builds/patches/common/ /tmp/ersatzrs-patches/
+COPY images/ffmpeg-builds/prepare-patches.py /tmp/ersatzrs-build/
+COPY images/ffmpeg-builds/patches/ /tmp/ersatzrs-build/patches/
+RUN python3 /tmp/ersatzrs-build/prepare-patches.py --stage /tmp/ersatzrs-patches common
 RUN cd /tmp/ffmpeg && for patch in /tmp/ersatzrs-patches/*.patch; do \
-    patch --batch --fuzz=0 -p1 < "$patch" || exit 1; done
+    patch --forward --batch --fuzz=0 -p1 < "$patch" || exit 1; done
 
 # FFmpeg 9 compiles Vulkan shaders with glslc instead of linking libshaderc.
 RUN cd /tmp/ffmpeg && \

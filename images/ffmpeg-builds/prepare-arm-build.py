@@ -5,7 +5,6 @@ import sys
 from pathlib import Path
 
 BUILDS_REVISION = "d04d5526084bb699ca2b400c32bbab7eb3ebcb4e"
-FFMPEG_REVISION = "d32b387f2b0a484599d4587d651891f0c63c4238"
 
 if len(sys.argv) != 3 or sys.argv[2] not in ("linuxarm64", "linuxarmv7"):
     raise SystemExit("usage: prepare-arm-build.py BUILD_TREE {linuxarm64|linuxarmv7}")
@@ -27,10 +26,6 @@ if target == "linuxarm64":
     configure += " --enable-rkmpp --enable-rkrga --enable-libdrm --enable-version3"
 replacements = {
     "git clone --filter=blob:none --branch=": "git clone --depth=1 --branch=",
-    "    cd ffmpeg\n": (
-        "    cd ffmpeg\n"
-        f'    test "\\$(git rev-parse HEAD)" = {FFMPEG_REVISION}\n'
-    ),
     "./configure --prefix=": f"./configure {configure} --prefix=",
     "make -j\\$(nproc) V=1": "make -j4 V=1",
     "xz -T0": "xz -T2",

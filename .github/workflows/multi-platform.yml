@@ -18,7 +18,7 @@ on:
 env:
   REGISTRY: ghcr.io
   IMAGE_NAME: ghcr.io/bartdeijkers/ersatzrs-ffmpeg
-  RELEASE_VERSION: '9.0'
+  RELEASE_VERSION: '9.1'
 
 permissions:
   contents: read

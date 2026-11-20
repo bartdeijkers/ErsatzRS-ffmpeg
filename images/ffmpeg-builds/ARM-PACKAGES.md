@@ -18,7 +18,7 @@ Its source revision is BtbN/FFmpeg-Builds
 [run 36797641674, job 110166072467](https://github.com/BtbN/FFmpeg-Builds/actions/runs/36797641674/job/110166072467)
 records that exact exported digest. The image contains static Cairo, librsvg and
 the subtitle/text shaping dependencies; it does not need a second SVG build.
-The n9.0 build below uses the earlier, separately pinned build-script revision.
+The n9.1 build below uses the earlier, separately pinned build-script revision.
 Do not describe that script revision as the dependency image's source revision.
 
 ## Prepare and build FFmpeg
@@ -33,21 +33,19 @@ python3 images/ffmpeg-builds/prepare-arm-build.py <build-tree> linuxarm64
 In the prepared tree, select the dependency image above:
 
 ```sh
-FFBUILD_IMAGE_OVERRIDE=<exact-image-digest> GIT_BRANCH_OVERRIDE=n9.0 \
+FFBUILD_IMAGE_OVERRIDE=<exact-image-digest> GIT_BRANCH_OVERRIDE=n9.1 \
   ./build.sh linuxarm64 gpl 9.0
 ```
 
 The preparation script requires the pinned build-script revision, verifies
-FFmpeg commit `d32b387f2b0a484599d4587d651891f0c63c4238`, applies the common
+FFmpeg commit `74e4393595cf2b5857f0da925c4e0dd74ea306e5`, applies the common
 patches with `git apply --check`, enables Cairo and limits compilation to four
 jobs. ARMv7 explicitly passes its hard-float FPU flags through FFmpeg's
 compiler/assembler probes and places libm after static codec libraries during
 linking. FFmpeg 9 excludes ARM32 from its NVIDIA codec backend, so that target
 disables ffnvcodec and CUDA LLVM; ARM64 and x64 settings are unchanged.
-Patch 0014 adapts FFmpeg 9 to OpenAPV 1.1's metadata API while retaining
-compatibility with the older API used by the existing x64 packages. Its source
-is ErsatzTV/ErsatzTV-ffmpeg commit
-`5bdca62b3d8b129d7ddec66647e8a36c7d680678`.
+FFmpeg 9.1 includes the OpenAPV metadata API compatibility previously supplied
+by patch 0014.
 
 The unpublished v2.0.7 ARM64 candidate first extends the exact dependency image
 with `rockchip/Dockerfile` (build context: `images/ffmpeg-builds/`). Its reviewed

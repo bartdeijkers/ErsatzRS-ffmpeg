@@ -1,17 +1,17 @@
 diff --git a/libavutil/hwcontext_d3d11va.c b/libavutil/hwcontext_d3d11va.c
-index 2808093..caeae89 100644
+index 8a51eae1..76933018 100644
 --- a/libavutil/hwcontext_d3d11va.c
 +++ b/libavutil/hwcontext_d3d11va.c
-@@ -294,8 +294,6 @@ static int d3d11va_frames_init(AVHWFramesContext *ctx)
-     hwctx->BindFlags |= device_hwctx->BindFlags;
-     hwctx->MiscFlags |= device_hwctx->MiscFlags;
+@@ -297,8 +297,6 @@ static int d3d11va_frames_init(AVHWFramesContext *ctx)
+     if (s->format == DXGI_FORMAT_420_OPAQUE)
+         hwctx->BindFlags &= ~D3D11_BIND_SHADER_RESOURCE;
  
 -    ctx->initial_pool_size = FFMIN(ctx->initial_pool_size, MAX_ARRAY_SIZE);
 -
      texDesc = (D3D11_TEXTURE2D_DESC){
          .Width      = ctx->width,
          .Height     = ctx->height,
-@@ -330,6 +328,19 @@ static int d3d11va_frames_init(AVHWFramesContext *ctx)
+@@ -333,6 +331,19 @@ static int d3d11va_frames_init(AVHWFramesContext *ctx)
       * vpp_qsv output pools (MFX_MEMTYPE_FROM_VPPOUT) to D3D11_BIND_RENDER_TARGET.
       * Confirmed still required on Intel UHD (TGL) and Arc (DG2). */
      } else if (!(texDesc.BindFlags & D3D11_BIND_RENDER_TARGET) && texDesc.ArraySize > 0) {

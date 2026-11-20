@@ -54,7 +54,7 @@ on:
 env:
   # Upstream FFmpeg version these packages contain (independent of the repo
   # release tag, which is the v*.*.* git tag).
-  FFMPEG_VERSION: '9.0'
+  FFMPEG_VERSION: '9.1'
 
 jobs:
   linux-x64:
@@ -238,8 +238,8 @@ jobs:
       - name: Build static win-x64 FFmpeg via BtbN FFmpeg-Builds
         # makeimage.sh builds the cross toolchain + every dependency into a
         # Docker image; build.sh then statically links FFmpeg against them.
-        # The `9.0` addin sets FFmpeg version gating; GIT_BRANCH_OVERRIDE pins
-        # the exact upstream release tag (n9.0). Our cairo/pixman overrides
+        # Keep the pinned BtbN 9.0 dependency addin. GIT_BRANCH_OVERRIDE selects
+        # n9.1 and prepare-patches.py checks the source revision. Cairo/pixman overrides
         # (which upstream lacks) are dropped into scripts.d/ first, and cairo is
         # registered in the build graph (see below).
         env:
